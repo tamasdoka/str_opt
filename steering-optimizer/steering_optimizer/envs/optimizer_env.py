@@ -308,13 +308,15 @@ class StrOptEnv(gym.Env):
             error_array_mod = error_array
             r_array_mod = r_array
 
-        error = np.trapz(error_array_mod * 10000, r_array_mod)
+        error = np.trapz(error_array_mod * 10000, r_array_mod * 100)
+
+        self.save_plot(error_array_mod, r_array_mod)
 
         if error < 0:
             print('Error is not valid!:', error)
 
         # Integrating the total error
-        error_orig = np.trapz(error_array, r_array)
+        # error_orig = np.trapz(error_array, r_array)
 
         # TODO write a function for printing curve plots to file
 
@@ -335,7 +337,7 @@ class StrOptEnv(gym.Env):
                 print('len error array', len(error_array))
                 print('integral chk', integral_check)
             else:
-                reward = (1 / error) * 1000
+                reward = (1 / error) * 100000
                 # If the turning radius is above desired the reward function scales down
                 if max_turning_angle < self.border_ang:
                     # However we must give a reward for going towards border angle
@@ -352,7 +354,7 @@ class StrOptEnv(gym.Env):
             self.steps_beyond_done += 1
             reward = 0.0
 
-        #print('reward', reward)
+        print('reward', reward)
 
         return np.array(self.state), reward, done, {}
 
