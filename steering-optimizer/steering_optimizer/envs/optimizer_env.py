@@ -336,7 +336,7 @@ class StrOptEnv(gym.Env):
                 print('len error array', len(error_array))
                 print('integral chk', integral_check)
             else:
-                reward = 1 / error
+                reward = (1 / error) * 1000
                 # If the turning radius is above desired the reward function scales down
                 if max_turning_angle < self.border_ang:
                     # However we must give a reward for going towards border angle
@@ -352,6 +352,8 @@ class StrOptEnv(gym.Env):
                     "-- any further steps are undefined behavior.")
             self.steps_beyond_done += 1
             reward = 0.0
+
+        print('reward', reward)
 
         return np.array(self.state), reward, done, {}
 
