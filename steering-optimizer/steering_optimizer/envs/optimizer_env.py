@@ -317,7 +317,7 @@ class StrOptEnv(gym.Env):
             error_array_mod = error_array
             r_array_mod = r_array
 
-        self.save_plot(error_array_mod, r_array_mod)
+        #self.save_plot(error_array_mod, r_array_mod)
 
         error = np.trapz(error_array_mod * 10000, r_array_mod)
 
