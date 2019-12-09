@@ -197,7 +197,7 @@ class StrOptEnv(gym.Env):
         k_array = np.array([])
 
         # Data point number of rack travel - turning angle curve
-        max_loop = 100
+        max_loop = 20
         loop_count = max_loop
 
         # We only check the turning angle error above minimal turning radius, so we throw away the unnecessary values
@@ -282,6 +282,9 @@ class StrOptEnv(gym.Env):
 
         if error < 0:
             print('Error is not valid!:', error)
+            print('integral_chk:', integral_check)
+            print('len(error_array) - integral_check', len(error_array) - integral_check)
+            print('len(error_array)', len(error_array))
         #print('error', error)
 
         ## Integrating the total error
