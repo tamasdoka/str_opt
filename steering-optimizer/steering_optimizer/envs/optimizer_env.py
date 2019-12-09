@@ -308,7 +308,7 @@ class StrOptEnv(gym.Env):
             error_array_mod = error_array
             r_array_mod = r_array
 
-        error = np.trapz(error_array_mod * 10000, r_array_mod * 100)
+        error = np.trapz(error_array_mod * 100, r_array_mod * 100)
 
         if abs(error) > 100000:
             print('Top error reached', error)
