@@ -126,6 +126,8 @@ class StrOptEnv(gym.Env):
 
         self.switch = np.zeros(4, )
 
+        self.check_error = None
+
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
@@ -286,9 +288,8 @@ class StrOptEnv(gym.Env):
             print('integral_chk:', integral_check)
             print('len(error_array) - integral_check', len(error_array) - integral_check)
             print('len(error_array)', len(error_array))
-
-            figure()
-            plt.plot(error_array)
+            self.check_error = error_array
+            input("Press Enter to continue...")
         #print('error', error)
 
         ## Integrating the total error
