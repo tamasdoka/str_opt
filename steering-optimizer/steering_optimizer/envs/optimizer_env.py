@@ -309,6 +309,9 @@ class StrOptEnv(gym.Env):
             error_array_mod = error_array
             r_array_mod = r_array
 
+        self.check_error = error_array_mod
+        self.check_r = r_array_mod
+
         done = None
 
         unique = np.unique(r_array_mod)
@@ -320,7 +323,7 @@ class StrOptEnv(gym.Env):
         else:
             error = np.trapz(error_array_mod * 100, r_array_mod * 100)
 
-            self.check_error = error
+            #self.check_error = error
             self.state = (dx, dy, ax, ay)
 
             if abs(error) > 100000:
