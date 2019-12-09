@@ -1,195 +1,450 @@
+"""
+Basic custom 2D steering geometry optimizer based on OpenAI Gym Examples
+Implemented by Tamas Doka
+"""
+
+import math
 import gym
-from gym import error, spaces, utils
+from gym import spaces, logger
 from gym.utils import seeding
 import numpy as np
-from sympy.core.symbol import symbols
-from sympy.solvers import solve
-from sympy import Symbol
+
+import circle_test as ct
+from matplotlib import pyplot as plt
+from pathlib import Path
+
+# Changing the 4 variables: raising or lowering
+N_DISCRETE_ACTIONS = 9
+WHEELBASE = 1900
+TRACK_WIDTH = 1200
+KINGPIN = 150
+TURNING_RADIUS = 4000
+
 
 class StrOptEnv(gym.Env):
-  metadata = {'render.modes': ['human']}
+    """
+    Description:
+        The goal is to find the optimal steering geometry for a given wheelbase, track width and kingpin distance and
+        a minimal turning radius by altering the parameters of the steering rack and the control arm, in a simplified
+        2D top view representation.
+    Source:
+        This environment uses the analytical solution for steering angles of a front steered ideally turning four-wheel
+        vehicle.
+    Observation:
+        Type: Box(5)
+        Num	Observation                                     Min         Max
+        0	Left Control Arm endpoint x-coordinate         -Inf          0
+        1	Left Control Arm endpoint y-coordinate         -Inf         Inf
+        2	Steering rack left endpoint x-coordinate       -Inf          0
+        3	Steering rack left endpoint y-coordinate       -Inf         Inf
+     ###4   Integral of the error curve for steering         0          Inf
 
-  def __init__(self):
-    self.WB = WB
-    self.TW = TW
-    self.KP = KP
-    self.tr_min = tr_min
+    Actions:
+        Type: Discrete(9)
+        Num	Action
+        0	Increasing Left Control Arm endpoint x-coordinate
+        1	Increasing Left Control Arm endpoint y-coordinate
+        2	Increasing Steering rack left endpoint x-coordinate
+        3	Increasing Steering rack left endpoint y-coordinate
+        4	Decreasing Left Control Arm endpoint x-coordinate
+        5	Decreasing Left Control Arm endpoint y-coordinate
+        6	Decreasing Steering rack left endpoint x-coordinate
+        7	Decreasing Steering rack left endpoint y-coordinate
+        8   Do nothing
 
-    self.WLX = -TW/2
-    self.WLY = 0.0
+        Note: The amount of increasing or decreasing the coordinates is fixed in a constant
+    Reward:
+        Reward is the multiplicative inverse of the steering angle error from infinite to minimal turning radius.
+    Starting State:
+        ####All observations are assigned a uniform random value in [-0.05..0.05]
+        Left Control arm x and y coordinates calculated from the Ackerman-angle
+        and a random length between [0.15 .. 0.2]*TW, where TW is the track width of the vehicle.
 
-    self.KPLX = WLX+KP
-    self.KPLY = WLY
+        Steering rack x coordinate are a random value between -[0.15 .. 0.3]* TW
+        Steering rack y coordinate are a random value between -[0.15 .. 0.3]* TW
+    Episode Termination:
+        ####Pole Angle is more than 12 degrees
+        ####Cart Position is more than 2.4 (center of the cart reaches the edge of the display)
+        Episode length is greater than 200
+        ####Solved Requirements
+        ####Considered solved when the average reward is greater than or equal to 195.0 over 100 consecutive trials.
+    """
 
-    self.A = 100
-    self.A_ang = -75
-    self.Dx = -100
-    self.Dy = -200
+    metadata = {
+        'render.modes': ['human', 'rgb_array'],
+        'video.frames_per_second': 24
+    }
 
-    self.tr_eval = np.inf
-    self.error = np.inf
+    def __init__(self):
+        # Wheelbase length
+        self.WB = WHEELBASE
+        # Track width length
+        self.TW = TRACK_WIDTH
+        # Distance between the kingpin point and the center of the wheel
+        self.KP = KINGPIN
+        # Minimal turning radius
+        self.tr_min = TURNING_RADIUS
 
-
-    self.observation_space = [self.A, self.A_ang, self.Dx, self.Dy, self.WB, self.TW, self.KP, self.tr_eval, self.error]
-    self.action_space = [0,'A+', 'A_ang+', 'Dx+', 'Dy+', 'A-', 'A_ang-', 'Dx-', 'Dy-']
-
-    Ax, Ay, Tx, Ty, T, A, z, Dy = symbols('Ax, Ay, Tx, Ty, T, A, z, Dy')
-
-    eq1 = self.KPLX + Ax + Tx - z
-    eq2 = self.KPLY + Ay + Ty - Dy
-    eq3 = Ax**2 + Ay**2 - A**2
-    eq4 = Tx**2 + Ty**2 - T**2
-    system = [eq4, eq2, eq3, eq1]
-
-    solution = solve(system, [Ax, Ay, Tx, Ty, z])
-
-    Ax_solutions = [sol[Ax] for sol in solution]
-    Ay_solutions = [sol[Ay] for sol in solution]
-
-  def step(self, action):
-
-    #INPUT LIST
-
-    # [0] ARM length, [1] ARM angle in degrees, [2] Rack endpoint distance from middle axis, [3] Rack distance from front axis
-
-    input_list = [100, -45, -100, -100]
-
-    #Rack parameters
-
-    Dx = input_list[2]
-    Dy_eval = input_list[3]
-
-
-    #Arm length and angle
-    A_eval = input_list[0]
-    angle_deg = input_list[1]
-
-
-    original_ARM_angle = angle_deg/180*np.pi
-
-    #Arm coordinates
-    Ax0 = KPLX + A_eval*np.cos(original_ARM_angle)
-    Ay0 = KPLY + A_eval*np.sin(original_ARM_angle)
-
-    #tierod length
-    T_eval = np.sqrt(np.power((Ax0-Dx),2)+np.power((Ay0-Dy_eval),2))
-
-    #MAXIMAL TRAVEL DISTANCE
-
-    Dmax = T_eval + A_eval
-    DmaxX_dist = np.sqrt(np.power(Dmax,2) - np.power(Dy_eval,2))
-    DmaxX = DmaxX_dist + KPLX
-    travelmax = DmaxX - Dx
+        # Outer (right) wheel angle at minimum turning radius
+        self.border_ang = np.arcsin(self.WB / (self.tr_min - self.KP))
+        # Center of the front left wheel (x,y)
+        self.WLX = -self.TW / 2
+        self.WLY = 0.0
+        # Front left kingpin point (x,y)
+        self.KPLX = self.WLX + self.KP
+        self.KPLY = self.WLY
 
 
-    Dmin = T_eval - A_eval
-    DminX_dist = np.sqrt(np.power(Dmin,2) - np.power(Dy_eval,2))
-    DminX = DminX_dist + KPLX
-    travelmin = DminX - Dx
+        # Amount of increase or decrease
+        self.amount = 1
+        # Threshold for observations
+        x_threshold = 2 * self.amount
 
-    if np.abs(travelmax) > np.abs(travelmin):
-        travel = np.abs(travelmin)
-    else:
-        travel = np.abs(travelmax)
+        # Angle limit set to 2 * theta_threshold_radians so failing observation is still within bounds
+        high = np.array([
+            0 + x_threshold,
+            np.finfo(np.float32).max,
+            0 + x_threshold,
+            np.finfo(np.float32).max])
 
-    #Initial angle orientation calc
+        low = np.array([
+            -np.finfo(np.float32).max,
+            -np.finfo(np.float32).max,
+            -np.finfo(np.float32).max,
+            -np.finfo(np.float32).max])
 
-    szog = np.arctan((KPLY-Dy_eval)/(KPLX-Dx))/np.pi*180
-    szog_diff = angle_deg - szog
-    szog_diff_rad = szog_diff/180*np.pi
+        self.action_space = spaces.Discrete(N_DISCRETE_ACTIONS)
+        self.observation_space = spaces.Box(low, high, dtype=np.float32)
 
-    #Substituting basic parameters
-    import sympy
+        self.seed()
+        self.viewer = None
+        self.state = None
 
-    Ax_solutions_simp = []
-    Ay_solutions_simp = []
+        self.steps_beyond_done = None
+        self.steps_since_reset = None
+
+        self.switch = np.zeros(4, )
+
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
+
+    def step(self, action):
+        assert self.action_space.contains(action), "%r (%s) invalid" % (action, type(action))
+
+        self.steps_since_reset += 1
+
+        state = self.state
+
+        #### Action ###
+        dx, dy, ax, ay = self._take_action(action, state)
+
+        # initial (left) control arm length and angle
+        arm_length = np.sqrt((ax - self.KPLX) ** 2 + (ay - self.KPLY) ** 2)
+        beta_deg = np.arctan2(ay, ax - self.KPLX)/np.pi*180
+        beta = beta_deg / 180 * np.pi
+        # initial (right - outer) control arm angle
+        beta_c_deg = -180 - beta_deg
+        beta_c = beta_c_deg / 180 * np.pi
+
+        # Tierod length
+        tierod_length = np.sqrt(np.power((ax - dx), 2) + np.power((ay - dy), 2))
+
+        # Calculating the maximum of rack travel to positive direction (right), which turns the wheels to left (positive
+        # turn angles)
+        max_ta_distance = tierod_length + arm_length
+        max_ta_distance_x = np.sqrt(np.power(max_ta_distance, 2) - np.power(dy, 2))
+        max_ta_distance_x_coord = max_ta_distance_x + self.KPLX
+        rack_travel_max = max_ta_distance_x_coord - dx
+
+        min_ta_distance = np.abs(tierod_length - arm_length)
+        min_ta_distance_x = np.sqrt(np.power(min_ta_distance, 2) - np.power(dy, 2))
+        min_ta_distance_x_coord = min_ta_distance_x + self.KPLX
+        rack_travel_min = min_ta_distance_x_coord - dx
+
+        # Locating the unstable configuration and choosing what we could reach sooner as rack travel in each direction
+        if np.abs(rack_travel_max) > np.abs(rack_travel_min):
+            rack_travel = np.abs(rack_travel_min)
+        else:
+            rack_travel = np.abs(rack_travel_max)
+
+        # Initial angle relations: alpha is the angle of the TA line
+        init_alpha_deg = np.arctan((self.KPLY - dy) / (self.KPLX - dx)) / np.pi * 180
+        ang_diff_deg = beta_deg - init_alpha_deg
+        ang_diff_rad = ang_diff_deg / 180 * np.pi
+        ang_diff_c_deg = beta_c_deg - init_alpha_deg
+        ang_diff_c_rad = ang_diff_c_deg / 180 * np.pi
+
+        # Rack travel from initial position
+        x = 0
+        x_array = np.array([])
+        l_array = np.array([])
+        r_array = np.array([])
+        k_array = np.array([])
+
+        # Data point number of rack travel - turning angle curve
+        max_loop = 100
+        loop_count = max_loop
+
+        # We only check the turning angle error above minimal turning radius, so we throw away the unnecessary values
+        integral_check = 0
+        # Calculating the error curve in a loop
+        while loop_count > 0:
+            # Rack left endpoint position
+            x_eval = dx + x
+            x_array = np.append(x_array, x_eval - dx)
+
+            # The actual TA line angle
+            alpha = np.arctan2((self.KPLY - dy), (self.KPLX - x_eval))
+
+            # Circles around the kingpin (A) and the left tierod endpoint (T)
+            c1 = [0, 0, arm_length]
+            c2 = [x_eval - self.KPLX, dy - self.KPLY, tierod_length]
+            # Section points of the circles gives the mathematical solution for configuration
+            c_sec = ct.Geometry().circle_intersection(c1, c2)
+            betas = [np.arctan2(c_sec[1], c_sec[0]), np.arctan2(c_sec[3], c_sec[2])]
+
+            # Turning angle of the left wheel
+            if ang_diff_rad < 0 and (betas[0] - alpha) < 0:
+                arm_a = betas[0] - beta
+            else:
+                arm_a = betas[1] - beta
+
+            # Rack other side position
+            x_eval_c = -dx + x
+            alpha_c = np.arctan2((self.KPLY - dy), (-self.KPLX - x_eval_c))
+            c1 = [0, 0, arm_length]
+            c2 = [x_eval_c + self.KPLX, dy - self.KPLY, tierod_length]
+            c_sec = ct.Geometry().circle_intersection(c1, c2)
+            betas = [np.arctan2(c_sec[1], c_sec[0]), np.arctan2(c_sec[3], c_sec[2])]
+
+            # Turning angle of the right wheel
+            if ang_diff_c_rad < 0 and (betas[0] - alpha_c) < 0:
+                arm_ca = betas[0] - beta_c
+            else:
+                arm_ca = betas[1] - beta_c
+            # If the outer (right) wheel angle is bigger than the border angle, the minimal turning radius is smaller
+            # than the desired, which is not bad, but could cause large errors
+            if arm_ca > self.border_ang:
+                integral_check += 1
+
+            # Storing the angle values corresponding to the rack positions
+            l_array = np.append(l_array, arm_a)
+            r_array = np.append(r_array, arm_ca)
+
+            x = x + (rack_travel / max_loop)
+
+            loop_count = loop_count - 1
+
+        # For every given position
+        for i in range(0, len(x_array), 1):
+            # Calculating the distance between the rear right kingpin point and the center of the turning circle
+            # Because the outer (right) wheel determines the turning radius
+            # When the wheels are facing front, the turning radius is infinite, so the tangent of 0 turning degree
+            # becomes 0
+            if round(r_array[i], 5) == 0:
+                ideal_left_angle = 0
+            else:
+                dist = self.WB / np.tan(r_array[i])
+                # Calculating the ideal inner (front left wheel) angle to the given turning radius
+                ideal_left_angle = np.arctan2(self.WB, (dist - self.TW))
+
+            k_array = np.append(k_array, ideal_left_angle)
+
+        max_turning_angle = round(max(r_array), 5)
+
+        if max_turning_angle == 0:
+            tr_eval = np.inf
+        else:
+            tr_eval = np.sqrt((self.WB / np.tan(max_turning_angle)) ** 2 + self.WB ** 2) - self.KP
+
+        # Calculating the error of the steering configuration
+        # This array contains the difference between the ideal and the real value of the left turning angle
+        # For every rack position
+        error_array = np.power((k_array - l_array), 2)
+
+        # Integrating the error only above the minimal turning radius
+        error = np.trapz(error_array[0:(len(error_array) - integral_check)], r_array[0:(len(error_array) - integral_check)])
+
+        if error < 0:
+            print('Error is not valid!:', error)
+        #print('error', error)
+
+        ## Integrating the total error
+        error_orig = np.trapz(error_array, r_array)
+        #print('error_orig', error_orig)
+
+        # TODO write a function for printing curve plots to file
+
+        #self.save_plot(error_array, r_array)
+
+        self.state = (dx, dy, ax, ay)
+        # Stepping out of boundaries
+        done = dx > 0 \
+               or ax > 0 \
+               or self.steps_since_reset > self.TW
+        done = bool(done)
+
+        reward = 0.0
+
+        if not done:
+            if error == 0:
+                print('Error == 0')
+                print('len error array', len(error_array))
+                print('integral chk', integral_check)
+            else:
+                reward = 1 / (error * 1000)
+                # If the turning radius is above desired the reward function scales down
+                if max_turning_angle < self.border_ang:
+                    reward = reward * 0.01
+        elif self.steps_beyond_done is None:
+            self.steps_beyond_done = 0
+            reward = 0.0
+        else:
+            if self.steps_beyond_done == 0:
+                logger.warn(
+                    "You are calling 'step()' even though this environment has already returned done = True."
+                    " You should always call 'reset()' once you receive 'done = True' "
+                    "-- any further steps are undefined behavior.")
+            self.steps_beyond_done += 1
+            reward = 0.0
+
+        return np.array(self.state), reward, done, {}
+
+    def reset(self):
+        self.state = self.ackerman_state()
+        self.steps_beyond_done = None
+        self.steps_since_reset = 0
+
+        return self.state
+
+    def _take_action(self, action, state):
+
+        amount = self.amount
+        mod = np.array(state)
+
+        for i in range(0, 3, 1):
+            if action == i:
+                self.switch[i] = -1
+
+        for i in range(4, 7, 1):
+            if action == i:
+                self.switch[i-4] = 1
+
+        if action == 8:
+            self.switch = np.zeros((4,))
+
+        for i in range(4):
+            mod[i] = self.switch[i] * amount + state[i]
+        return mod
+
+    def render(self, mode='human'):
+        screen_width = 600
+        screen_height = 400
+
+        world_width = self.TW + 200
+        scale = screen_width / world_width
+
+        #
+        # carty = 100  # TOP OF CART
+        # polewidth = 10.0
+        # polelen = scale * (2 * self.length)
+        # cartwidth = 50.0
+        # cartheight = 30.0
+
+        if self.viewer is None:
+            from gym.envs.classic_control import rendering
+            self.viewer = rendering.Viewer(screen_width, screen_height)
+
+            self.geometry = rendering.Line((self.KPLX,
+                                         self.state[2],
+                                         self.state[0],
+                                        -self.state[0],
+                                        -self.state[2],
+                                        -self.KPLX),
+                                        (self.KPLY,
+                                         self.state[3],
+                                         self.state[1],
+                                         self.state[1],
+                                         self.state[3],
+                                         self.KPLY))
+            self.geometry.set_color(0, 0, 0)
+            # self.geometrytrans = rendering.Transform()
+            # self.geometry.add_attr(self.geometrytrans)
+            self.viewer.add_geom(self.geometry)
 
 
-    Ax_solutions_simp.append(sympy.simplify(Ax_solutions[0]).subs({"T":T_eval, "Dy":Dy_eval, "A":A_eval})) 
-    Ax_solutions_simp.append(sympy.simplify(Ax_solutions[1]).subs({"T":T_eval, "Dy":Dy_eval, "A":A_eval})) 
+            # l, r, t, b = -cartwidth / 2, cartwidth / 2, cartheight / 2, -cartheight / 2
+            # axleoffset = cartheight / 4.0
+            # cart = rendering.FilledPolygon([(l, b), (l, t), (r, t), (r, b)])
+            # self.carttrans = rendering.Transform()
+            # cart.add_attr(self.carttrans)
+            # self.viewer.add_geom(cart)
+            #
+            # l, r, t, b = -polewidth / 2, polewidth / 2, polelen - polewidth / 2, -polewidth / 2
+            # pole = rendering.FilledPolygon([(l, b), (l, t), (r, t), (r, b)])
+            # pole.set_color(.8, .6, .4)
+            # self.poletrans = rendering.Transform(translation=(0, axleoffset))
+            # pole.add_attr(self.poletrans)
+            # pole.add_attr(self.carttrans)
+            # self.viewer.add_geom(pole)
+            # self.axle = rendering.make_circle(polewidth / 2)
+            # self.axle.add_attr(self.poletrans)
+            # self.axle.add_attr(self.carttrans)
+            # self.axle.set_color(.5, .5, .8)
+            # self.viewer.add_geom(self.axle)
+            #
+            # self._pole_geom = pole
 
-    Ay_solutions_simp.append(sympy.simplify(Ay_solutions[0]).subs({"T":T_eval, "Dy":Dy_eval, "A":A_eval}))
-    Ay_solutions_simp.append(sympy.simplify(Ay_solutions[1]).subs({"T":T_eval, "Dy":Dy_eval, "A":A_eval}))
+        if self.state is None: return None
 
-    while x < travel:
-      z_eval = Dx + x
-      z_array = np.append(z_array,z_eval-Dx)
+        # # Edit the pole polygon vertex
+        # pole = self._pole_geom
+        # l, r, t, b = -polewidth / 2, polewidth / 2, polelen - polewidth / 2, -polewidth / 2
+        # pole.v = [(l, b), (l, t), (r, t), (r, b)]
+        #
+        # x = self.state
+        # cartx = x[0] * scale + screen_width / 2.0  # MIDDLE OF CART
+        # self.carttrans.set_translation(cartx, carty)
+        # self.poletrans.set_rotation(-x[2])
 
-      z_eval_c = Dx - x
+        return self.viewer.render(return_rgb_array=mode == 'rgb_array')
 
-      Ax_0 = float(eval_eqn(Ax_solutions_simp[0], {"z":z_eval}))
-      Ay_0 = float(eval_eqn(Ay_solutions_simp[0], {"z":z_eval}))
+    def close(self):
+        if self.viewer:
+            self.viewer.close()
+            self.viewer = None
 
-      ARM_f1 = (np.arctan2(Ay_0,Ax_0)-original_ARM_angle)*180/np.pi
-    
-      if (szog_diff_rad > 0 and (ARM_f1-szog/180*np.pi) > 0) or (szog_diff_rad < 0 and (ARM_f1-szog/180*np.pi) < 0):
+    def ackerman_state(self):
+        length = 100 + np.random.uniform(-1.0, 1.0) * 20
+        ackerman_angle = np.arctan2(-2 * self.WB, self.TW)
 
-        Ax_0_c = float(eval_eqn(Ax_solutions_simp[0], {"z":z_eval_c}))
-        Ay_0_c = float(eval_eqn(Ay_solutions_simp[0], {"z":z_eval_c}))
+        ax0 = self.KPLX + length * np.cos(ackerman_angle)
+        ay0 = self.KPLY + length * np.sin(ackerman_angle)
+        rack_x = -100 + np.random.uniform(-1.0, 1.0) * 20
+        rack_y = -200 + np.random.uniform(-1.0, 1.0) * 20
 
-        ARM_f1c = -(np.arctan2(Ay_0_c,Ax_0_c)-original_ARM_angle)*180/np.pi
+        state = np.array([rack_x, rack_y, ax0, ay0])
+        return state
 
-        #ARM_f1 = (f1-original_ARM_angle)*180/np.pi 
-        #ARM_f1c = -(f1c-original_ARM_angle)*180/np.pi
-        
-      else:
-        Ax_1 = float(eval_eqn(Ax_solutions_simp[1], {"z":z_eval}))
-        Ay_1 = float(eval_eqn(Ay_solutions_simp[1], {"z":z_eval}))
+    def save_plot(self, error_array, r_array):
+        # Save error plot
+        plt.plot(r_array/np.pi*180, error_array/np.pi*180)
+        plt.axvline(x=self.border_ang/np.pi*180)
+        plt.axis([0, (self.border_ang/np.pi*180)+10, 0, 2])
 
-        ARM_f1 = (np.arctan2(Ay_1,Ax_1)-original_ARM_angle)*180/np.pi
+        filename = str(self.steps_since_reset) + '.png'
+        pic = Path("pic/")
+        pic_save_path = pic / filename
+        plt.savefig(pic_save_path, bbox_inches='tight')
 
-        Ax_1_c = float(eval_eqn(Ax_solutions_simp[1], {"z":z_eval_c}))
-        Ay_1_c = float(eval_eqn(Ay_solutions_simp[1], {"z":z_eval_c}))
-      
-        ARM_f1c = -(np.arctan2(Ay_1_c,Ax_1_c)-original_ARM_angle)*180/np.pi
+    def diag(self):
+        # Save error plot
+        plt.plot(r_array/np.pi*180, error_array/np.pi*180)
+        plt.axvline(x=self.border_ang/np.pi*180)
+        plt.axis([0, (self.border_ang/np.pi*180)+10, 0, 2])
 
-        #ARM_f1 = (f2-original_ARM_angle)*180/np.pi
-        #ARM_f1c = -(f2c-original_ARM_angle)*180/np.pi
-    
-      if ARM_f1 > 180:
-        ARM_f1 = ARM_f1 - 360
-    
-      if ARM_f1c > 180:
-        ARM_f1c = ARM_f1c - 360
-    
-      l_array = np.append(l_array,ARM_f1)
-      r_array = np.append(r_array,ARM_f1c)
-    
-      x = x+travel/25
-    
-    solv = z_array
-
-    # Inner tire angle when turning left
-    l = l_array
-
-    # Outer tire angle when turning left
-    r = r_array
-
-    k = []
-
-    for i in range(0,len(solv),1):
-      k.append(np.arctan(WB/(WB/(np.tan(r[i]/180*np.pi))-TW))/np.pi*180)
-    
-    self.tr_eval = WB/np.arcsin(max(r)/180*np.pi)
-
-    state = [self.A, self.A_ang, self.Dx, self.Dy, self.WB, self.TW, self.KP, self.tr_eval, self.error]
-
-    return np.array(state, dtype=np.float32), reward, done, {}
-
-  def reset(self):
-
-    x = 0
-    z_array = np.array([])
-    l_array = np.array([])
-    r_array = np.array([])
-
-    return self.step(0)[0]
-
-  def render(self, mode='human', close=False):
-    return
-  def eval_eqn(eqn,in_dict):
-    subs = {sympy.symbols(key):item for key,item in in_dict.items()}
-    ans = sympy.simplify(eqn).evalf(subs = subs)
-
-    return ans
-    
+        filename = str(self.steps_since_reset) + '.png'
+        pic = Path("pic/")
+        pic_save_path = pic / filename
+        plt.savefig(pic_save_path, bbox_inches='tight')
