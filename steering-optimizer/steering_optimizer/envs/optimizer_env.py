@@ -294,21 +294,13 @@ class StrOptEnv(gym.Env):
             error_array_mod = error_array[0:b_index - 1]
             r_array_mod = r_array[0:b_index - 1]
 
-            # print('b_x0', error_array[b_index - 1])
-            # print('b_x1', error_array[b_index])
-            #
-            # print('r_x0', r_array[b_index - 1])
-            # print('border', self.border_ang)
-            # print('r_x1', r_array[b_index])
-
             # interpolation through border angle
             border_y = np.array([error_array[(b_index - 1)], error_array[b_index]])
             border_x = np.array([r_array[(b_index - 1)], r_array[b_index]])
             # Interpolating function
             f_inter = interp1d(border_x, border_y)
 
-            #input("Press Enter to continue...")
-
+            # Calculating error at border angle
             border_error = f_inter(self.border_ang)
 
             error_array_mod = np.append(error_array_mod, border_error)
@@ -317,28 +309,13 @@ class StrOptEnv(gym.Env):
             error_array_mod = error_array
             r_array_mod = r_array
 
-        #self.save_plot(error_array_mod, r_array_mod)
-
         error = np.trapz(error_array_mod * 10000, r_array_mod)
-
-        #print('error', error)
 
         if error < 0:
             print('Error is not valid!:', error)
-            #print('integral_chk:', integral_check)
-            #print('len(error_array) - integral_check', len(error_array) - integral_check)
-            #print('len(error_array)', len(error_array))
-            #print('b_index', b_index)
-            #self.check_error = error_array_mod
-            #self.check_r = r_array_mod
-            #good = error_array_mod >= 0
-            #print(good)
-            #input("Press Enter to continue...")
-        #print('error', error)
 
-        ## Integrating the total error
+        # Integrating the total error
         error_orig = np.trapz(error_array, r_array)
-        #print('error_orig', error_orig)
 
         # TODO write a function for printing curve plots to file
 
@@ -359,10 +336,11 @@ class StrOptEnv(gym.Env):
                 print('len error array', len(error_array))
                 print('integral chk', integral_check)
             else:
-                reward = 1 / (error * 1000)
+                reward = 1 / error
                 # If the turning radius is above desired the reward function scales down
                 if max_turning_angle < self.border_ang:
-                    reward = reward * 0.01
+                    # However we must give a reward for going towards border angle
+                    reward = reward * 0.05 - reward * 0.02 * ((self.border_ang - max(r_array))/self.border_ang)
         elif self.steps_beyond_done is None:
             self.steps_beyond_done = 0
             reward = 0.0
