@@ -312,8 +312,8 @@ class StrOptEnv(gym.Env):
 
         if abs(error) > 100000:
             print('Top error reached', error)
-            error = 10000
-            print('state', dx, dy, ax, ay)
+            error = 100000
+            print('state: %f.3, %f.3, %f.3, %f.3' % dx, dy, ax, ay)
 
 
         #self.save_plot(error_array_mod, r_array_mod)
@@ -343,7 +343,7 @@ class StrOptEnv(gym.Env):
                 print('len error array', len(error_array))
                 print('integral chk', integral_check)
             else:
-                reward = (1 / error) * 100000
+                reward = (1 / error) * 10000
                 # If the turning radius is above desired the reward function scales down
                 if max_turning_angle < self.border_ang:
                     # However we must give a reward for going towards border angle
