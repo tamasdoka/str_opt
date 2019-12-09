@@ -313,6 +313,8 @@ class StrOptEnv(gym.Env):
 
         self.check_error = error
 
+        self.state = (dx, dy, ax, ay)
+
         if abs(error) > 100000:
             print('Top error reached', error)
             error = 100000
@@ -323,6 +325,7 @@ class StrOptEnv(gym.Env):
 
         if error < 0:
             print('Error is not valid!:', error)
+            print('Invalid state:', self.state[0])
 
         # Integrating the total error
         # error_orig = np.trapz(error_array, r_array)
@@ -333,9 +336,12 @@ class StrOptEnv(gym.Env):
 
         self.state = (dx, dy, ax, ay)
         # Stepping out of boundaries
-        done = dx > 0 \
-               or ax > 0 \
-               or self.steps_since_reset > EPISODE_LENGTH or error < 0
+        done = dx > 0 or dx < -self.TW / 2\
+               or ax > 0 or ax < -self.TW / 2 \
+               or dy > self.TW / 2 or dy < -self.TW / 2 \
+               or ay > self.TW / 2 or ay < -self.TW / 2 \
+               or self.steps_since_reset > EPISODE_LENGTH \
+               or error < 0
         done = bool(done)
 
         reward = 0.0
