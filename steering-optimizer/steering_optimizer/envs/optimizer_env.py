@@ -36,11 +36,10 @@ class StrOptEnv(gym.Env):
     Observation:
         Type: Box(5)
         Num	Observation                                     Min         Max
-        0	Left Control Arm endpoint x-coordinate         -Inf          0
-        1	Left Control Arm endpoint y-coordinate         -Inf         Inf
-        2	Steering rack left endpoint x-coordinate       -Inf          0
-        3	Steering rack left endpoint y-coordinate       -Inf         Inf
-     ###4   Integral of the error curve for steering         0          Inf
+        0	Left Control Arm endpoint x-coordinate         -TW/2          0
+        1	Left Control Arm endpoint y-coordinate         -TW/2        TW/2
+        2	Steering rack left endpoint x-coordinate       -TW/2          0
+        3	Steering rack left endpoint y-coordinate       -TW/2        TW/2
 
     Actions:
         Type: Discrete(9)
@@ -106,15 +105,15 @@ class StrOptEnv(gym.Env):
         # Angle limit set to 2 * theta_threshold_radians so failing observation is still within bounds
         high = np.array([
             0 + x_threshold,
-            np.finfo(np.float32).max,
+            self.TW/2,
             0 + x_threshold,
-            np.finfo(np.float32).max])
+            self.TW/2])
 
         low = np.array([
-            -np.finfo(np.float32).max,
-            -np.finfo(np.float32).max,
-            -np.finfo(np.float32).max,
-            -np.finfo(np.float32).max])
+            -self.TW/2,
+            -self.TW/2,
+            -self.TW/2,
+            -self.TW/2])
 
         self.action_space = spaces.Discrete(N_DISCRETE_ACTIONS)
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
