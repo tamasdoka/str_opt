@@ -310,6 +310,10 @@ class StrOptEnv(gym.Env):
 
         error = np.trapz(error_array_mod * 10000, r_array_mod * 100)
 
+        if abs(error) > 100000:
+            error = 10000
+            print('Top error reached', error)
+
         #self.save_plot(error_array_mod, r_array_mod)
 
         if error < 0:
