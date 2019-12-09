@@ -13,6 +13,7 @@ import circle_test as ct
 from matplotlib import pyplot as plt
 from pathlib import Path
 
+
 # Changing the 4 variables: raising or lowering
 N_DISCRETE_ACTIONS = 9
 WHEELBASE = 1900
@@ -285,6 +286,9 @@ class StrOptEnv(gym.Env):
             print('integral_chk:', integral_check)
             print('len(error_array) - integral_check', len(error_array) - integral_check)
             print('len(error_array)', len(error_array))
+
+            figure()
+            plt.plot(error_array)
         #print('error', error)
 
         ## Integrating the total error
