@@ -164,13 +164,13 @@ class StrOptEnv(gym.Env):
             rack_travel = np.abs(rack_travel_max)
 
         else:
-            print('tierod length:', tierod_length)
-            print('arm_length:', arm_length)
-            print('min ta distance:', min_ta_distance)
-            print('min ta distance squared:', np.power(min_ta_distance, 2))
-            print('dy squared:', np.power(dy, 2))
-
-            print('what goes to sqrt:', np.power(min_ta_distance, 2) - np.power(dy, 2))
+            # print('tierod length:', tierod_length)
+            # print('arm_length:', arm_length)
+            # print('min ta distance:', min_ta_distance)
+            # print('min ta distance squared:', np.power(min_ta_distance, 2))
+            # print('dy squared:', np.power(dy, 2))
+            #
+            # print('what goes to sqrt:', np.power(min_ta_distance, 2) - np.power(dy, 2))
 
             min_ta_distance_x = np.sqrt(np.power(min_ta_distance, 2) - np.power(dy, 2))
             min_ta_distance_x_coord = min_ta_distance_x + self.KPLX
