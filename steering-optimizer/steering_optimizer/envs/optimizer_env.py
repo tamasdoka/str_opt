@@ -157,16 +157,30 @@ class StrOptEnv(gym.Env):
         max_ta_distance_x_coord = max_ta_distance_x + self.KPLX
         rack_travel_max = max_ta_distance_x_coord - dx
 
+        # Maximum rack travel until the counter arms becomes collinear
         min_ta_distance = np.abs(tierod_length - arm_length)
-        min_ta_distance_x = np.sqrt(np.power(min_ta_distance, 2) - np.power(dy, 2))
-        min_ta_distance_x_coord = min_ta_distance_x + self.KPLX
-        rack_travel_min = min_ta_distance_x_coord - dx
-
-        # Locating the unstable configuration and choosing what we could reach sooner as rack travel in each direction
-        if np.abs(rack_travel_max) > np.abs(rack_travel_min):
-            rack_travel = np.abs(rack_travel_min)
-        else:
+        # When the rack distance from the front axle is big enough, collinear configuration is not possible
+        if np.abs(dy) > min_ta_distance:
             rack_travel = np.abs(rack_travel_max)
+
+        else:
+            print('tierod length:', tierod_length)
+            print('arm_length:', arm_length)
+            print('min ta distance:', min_ta_distance)
+            print('min ta distance squared:', np.power(min_ta_distance, 2))
+            print('dy squared:', np.power(dy, 2))
+
+            print('what goes to sqrt:', np.power(min_ta_distance, 2) - np.power(dy, 2))
+
+            min_ta_distance_x = np.sqrt(np.power(min_ta_distance, 2) - np.power(dy, 2))
+            min_ta_distance_x_coord = min_ta_distance_x + self.KPLX
+            rack_travel_min = min_ta_distance_x_coord - dx
+
+            # Locating the unstable configuration and choosing what we could reach sooner as rack travel in each direction
+            if np.abs(rack_travel_max) > np.abs(rack_travel_min):
+                rack_travel = np.abs(rack_travel_min)
+            else:
+                rack_travel = np.abs(rack_travel_max)
 
         # Initial angle relations: alpha is the angle of the TA line
         init_alpha_deg = np.arctan((self.KPLY - dy) / (self.KPLX - dx)) / np.pi * 180
