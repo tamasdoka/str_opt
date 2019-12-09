@@ -353,7 +353,7 @@ class StrOptEnv(gym.Env):
             self.steps_beyond_done += 1
             reward = 0.0
 
-        print('reward', reward)
+        #print('reward', reward)
 
         return np.array(self.state), reward, done, {}
 
