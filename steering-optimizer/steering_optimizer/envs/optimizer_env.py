@@ -326,7 +326,7 @@ class StrOptEnv(gym.Env):
         # Stepping out of boundaries
         done = dx > 0 \
                or ax > 0 \
-               or self.steps_since_reset > self.TW
+               or self.steps_since_reset > self.TW or error < 0
         done = bool(done)
 
         reward = 0.0
@@ -354,7 +354,7 @@ class StrOptEnv(gym.Env):
             self.steps_beyond_done += 1
             reward = 0.0
 
-        print('reward', reward)
+        #print('reward', reward)
 
         return np.array(self.state), reward, done, {}
 
