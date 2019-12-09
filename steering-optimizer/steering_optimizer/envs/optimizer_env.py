@@ -281,15 +281,22 @@ class StrOptEnv(gym.Env):
         error_array = np.power((k_array - l_array), 2)
 
         # Integrating the error only above the minimal turning radius
-        error = np.trapz(error_array[0:(len(error_array) - integral_check - 1)],
-                         r_array[0:(len(error_array) - integral_check - 1)])
+
+        b_index = len(error_array) - integral_check
+
+        error_array_mod = error_array[0:(b_index - 1)]
+        r_array_mod = r_array[0:(b_index - 1)]
+        
+        error = np.trapz(error_array_mod, r_array_mod)
 
         if error < 0:
             print('Error is not valid!:', error)
             print('integral_chk:', integral_check)
             print('len(error_array) - integral_check', len(error_array) - integral_check)
             print('len(error_array)', len(error_array))
+            print('b_index', b_index)
             self.check_error = error_array
+            self.check_r = r_array
             input("Press Enter to continue...")
         #print('error', error)
 
