@@ -12,6 +12,8 @@ import numpy as np
 import circle_test as ct
 from matplotlib import pyplot as plt
 from pathlib import Path
+# For interpolation
+from scipy.interpolate import interp1d
 
 
 # Changing the 4 variables: raising or lowering
@@ -127,6 +129,7 @@ class StrOptEnv(gym.Env):
         self.switch = np.zeros(4, )
 
         self.check_error = None
+        self.check_r = None
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -200,7 +203,7 @@ class StrOptEnv(gym.Env):
         k_array = np.array([])
 
         # Data point number of rack travel - turning angle curve
-        max_loop = 20
+        max_loop = 50
         loop_count = max_loop
 
         # We only check the turning angle error above minimal turning radius, so we throw away the unnecessary values
@@ -242,6 +245,8 @@ class StrOptEnv(gym.Env):
                 arm_ca = betas[1] - beta_c
             # If the outer (right) wheel angle is bigger than the border angle, the minimal turning radius is smaller
             # than the desired, which is not bad, but could cause large errors
+
+            # Over the border angle
             if arm_ca > self.border_ang:
                 integral_check += 1
 
@@ -280,24 +285,55 @@ class StrOptEnv(gym.Env):
         # For every rack position
         error_array = np.power((k_array - l_array), 2)
 
-        # Integrating the error only above the minimal turning radius
+        if integral_check > 0:
+            # Integrating the error only above the minimal turning radius
+            # First element index outside desired
+            b_index = len(error_array) - integral_check
 
-        b_index = len(error_array) - integral_check
+            # Values to keep
+            error_array_mod = error_array[0:b_index - 1]
+            r_array_mod = r_array[0:b_index - 1]
 
-        error_array_mod = error_array[0:(b_index - 1)]
-        r_array_mod = r_array[0:(b_index - 1)]
-        
-        error = np.trapz(error_array_mod, r_array_mod)
+            # print('b_x0', error_array[b_index - 1])
+            # print('b_x1', error_array[b_index])
+            #
+            # print('r_x0', r_array[b_index - 1])
+            # print('border', self.border_ang)
+            # print('r_x1', r_array[b_index])
+
+            # interpolation through border angle
+            border_y = np.array([error_array[(b_index - 1)], error_array[b_index]])
+            border_x = np.array([r_array[(b_index - 1)], r_array[b_index]])
+            # Interpolating function
+            f_inter = interp1d(border_x, border_y)
+
+            #input("Press Enter to continue...")
+
+            border_error = f_inter(self.border_ang)
+
+            error_array_mod = np.append(error_array_mod, border_error)
+            r_array_mod = np.append(r_array_mod, self.border_ang)
+        else:
+            error_array_mod = error_array
+            r_array_mod = r_array
+
+        self.save_plot(error_array_mod, r_array_mod)
+
+        error = np.trapz(error_array_mod * 10000, r_array_mod)
+
+        #print('error', error)
 
         if error < 0:
             print('Error is not valid!:', error)
-            print('integral_chk:', integral_check)
-            print('len(error_array) - integral_check', len(error_array) - integral_check)
-            print('len(error_array)', len(error_array))
-            print('b_index', b_index)
-            self.check_error = error_array
-            self.check_r = r_array
-            input("Press Enter to continue...")
+            #print('integral_chk:', integral_check)
+            #print('len(error_array) - integral_check', len(error_array) - integral_check)
+            #print('len(error_array)', len(error_array))
+            #print('b_index', b_index)
+            #self.check_error = error_array_mod
+            #self.check_r = r_array_mod
+            #good = error_array_mod >= 0
+            #print(good)
+            #input("Press Enter to continue...")
         #print('error', error)
 
         ## Integrating the total error
@@ -461,20 +497,20 @@ class StrOptEnv(gym.Env):
         # Save error plot
         plt.plot(r_array/np.pi*180, error_array/np.pi*180)
         plt.axvline(x=self.border_ang/np.pi*180)
-        plt.axis([0, (self.border_ang/np.pi*180)+10, 0, 2])
+        plt.axis([0, (self.border_ang/np.pi*180)+10, 0, 3])
 
         filename = str(self.steps_since_reset) + '.png'
         pic = Path("pic/")
         pic_save_path = pic / filename
         plt.savefig(pic_save_path, bbox_inches='tight')
 
-    def diag(self):
-        # Save error plot
-        plt.plot(r_array/np.pi*180, error_array/np.pi*180)
-        plt.axvline(x=self.border_ang/np.pi*180)
-        plt.axis([0, (self.border_ang/np.pi*180)+10, 0, 2])
-
-        filename = str(self.steps_since_reset) + '.png'
-        pic = Path("pic/")
-        pic_save_path = pic / filename
-        plt.savefig(pic_save_path, bbox_inches='tight')
+    # def diag(self):
+    #     # Save error plot
+    #     plt.plot(r_array/np.pi*180, error_array/np.pi*180)
+    #     plt.axvline(x=self.border_ang/np.pi*180)
+    #     plt.axis([0, (self.border_ang/np.pi*180)+10, 0, 3])
+    #
+    #     filename = str(self.steps_since_reset) + '.png'
+    #     pic = Path("pic/")
+    #     pic_save_path = pic / filename
+    #     plt.savefig(pic_save_path, bbox_inches='tight')
