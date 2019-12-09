@@ -22,6 +22,7 @@ WHEELBASE = 1900
 TRACK_WIDTH = 1200
 KINGPIN = 150
 TURNING_RADIUS = 4000
+EPISODE_LENGTH = 200
 
 
 class StrOptEnv(gym.Env):
@@ -310,6 +311,8 @@ class StrOptEnv(gym.Env):
 
         error = np.trapz(error_array_mod * 100, r_array_mod * 100)
 
+        self.check_error = error
+
         if abs(error) > 100000:
             print('Top error reached', error)
             error = 100000
@@ -332,7 +335,7 @@ class StrOptEnv(gym.Env):
         # Stepping out of boundaries
         done = dx > 0 \
                or ax > 0 \
-               or self.steps_since_reset > self.TW or error < 0
+               or self.steps_since_reset > EPISODE_LENGTH or error < 0
         done = bool(done)
 
         reward = 0.0
