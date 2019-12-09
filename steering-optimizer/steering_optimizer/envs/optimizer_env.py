@@ -309,34 +309,41 @@ class StrOptEnv(gym.Env):
             error_array_mod = error_array
             r_array_mod = r_array
 
-        error = np.trapz(error_array_mod * 100, r_array_mod * 100)
+        done = None
 
-        self.check_error = error
+        unique = np.unique(r_array_mod)
 
-        self.state = (dx, dy, ax, ay)
-
-        if abs(error) > 100000:
-            print('Top error reached', error)
+        if len(unique) != len(r_array_mod):
+            done = True
             error = 100000
-            print('state: %f.3, %f.3, %f.3, %f.3' % dx, dy, ax, ay)
+            print('Here is the problem!')
+        else:
+            error = np.trapz(error_array_mod * 100, r_array_mod * 100)
 
+            self.check_error = error
+            self.state = (dx, dy, ax, ay)
 
-        #self.save_plot(error_array_mod, r_array_mod)
+            if abs(error) > 100000:
+                print('Top error reached', error)
+                error = 100000
+                print('state: %f.3, %f.3, %f.3, %f.3' % dx, dy, ax, ay)
 
-        if error < 0:
-            print('Error is not valid!:', error)
-            print('Invalid state:', self.state[0])
+            # self.save_plot(error_array_mod, r_array_mod)
 
-        # Integrating the total error
-        # error_orig = np.trapz(error_array, r_array)
+            if error < 0:
+                print('Error is not valid!:', error)
+                print('Invalid state:', self.state)
 
-        # TODO write a function for printing curve plots to file
+            # Integrating the total error
+            # error_orig = np.trapz(error_array, r_array)
 
-        #self.save_plot(error_array, r_array)
+            # TODO write a function for printing curve plots to file
+
+            # self.save_plot(error_array, r_array)
 
         self.state = (dx, dy, ax, ay)
         # Stepping out of boundaries
-        done = dx > 0 or dx < -self.TW / 2\
+        done = dx > 0 or dx < -self.TW / 2 \
                or ax > 0 or ax < -self.TW / 2 \
                or dy > self.TW / 2 or dy < -self.TW / 2 \
                or ay > self.TW / 2 or ay < -self.TW / 2 \
