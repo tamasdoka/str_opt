@@ -565,4 +565,8 @@ class StrOptEnv(gym.Env):
         pic_save_path = pic / filename
         plt.savefig(pic_save_path, bbox_inches='tight')
 
+    def check_version(self):
+        # Print version
+        print('StrOpt version: dev')
+
 
