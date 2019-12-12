@@ -191,7 +191,7 @@ class StrOptEnv(gym.Env):
         self.rack_travel = rack_travel
 
         # Initial angle relations: alpha is the angle of the TA line
-        init_alpha_deg = np.arctan((self.KPLY - dy) / (self.KPLX - dx)) / np.pi * 180
+        init_alpha_deg = np.arctan((-self.KPLY + dy) / (-self.KPLX + dx)) / np.pi * 180
         ang_diff_deg = beta_deg - init_alpha_deg
         ang_diff_rad = ang_diff_deg / 180 * np.pi
         ang_diff_c_deg = beta_c_deg - init_alpha_deg
@@ -217,7 +217,7 @@ class StrOptEnv(gym.Env):
             x_array = np.append(x_array, x_eval - dx)
 
             # The actual TA line angle
-            alpha = np.arctan2((self.KPLY - dy), (self.KPLX - x_eval))
+            alpha = np.arctan2((-self.KPLY + dy), (-self.KPLX + x_eval))
 
             # Circles around the kingpin (A) and the left tierod endpoint (T)
             c1 = [0, 0, arm_length]
@@ -234,7 +234,8 @@ class StrOptEnv(gym.Env):
 
             # Rack other side position
             x_eval_c = -dx + x
-            alpha_c = np.arctan2((self.KPLY - dy), (-self.KPLX - x_eval_c))
+
+            alpha_c = np.arctan2((-self.KPLY + dy), (self.KPLX + x_eval_c))
             c1 = [0, 0, arm_length]
             c2 = [x_eval_c + self.KPLX, dy - self.KPLY, tierod_length]
             c_sec = ct.Geometry().circle_intersection(c1, c2)
@@ -243,17 +244,24 @@ class StrOptEnv(gym.Env):
             # TODO here could be the problem. Check how could arm_ca become negative.
 
             # Turning angle of the right wheel
-            if ang_diff_c_rad < 0 and (betas[0] - alpha_c) < 0:
-                arm_ca = betas[0] - beta_c
+            if ang_diff_c_rad > 0 and betas[0] - alpha_c >= 0:
+                arm_ca = round(betas[0] - beta_c, 5)
             else:
-                arm_ca = betas[1] - beta_c
+                arm_ca = round(betas[1] - beta_c, 5)
 
-            if arm_ca < 0 and round(arm_ca, 5) == 0:
-                print('Warning: counter beta turned negative! Value: %f' % (arm_ca/np.pi*180))
-                arm_ca = 0
-                print('Warning: counter beta corrected to zero! Value: %f' % (arm_ca / np.pi * 180))
-            elif arm_ca < 0:
-                print('Warning: undetected error, counter beta-> outer turning angle is negative! Value: ', arm_ca)
+            # if arm_ca < 0 and round(arm_ca, 5) == 0:
+            #     #print('Warning: counter beta turned negative! Value: %f' % (arm_ca/np.pi*180))
+            #     arm_ca = 0
+            #     #print('Warning: counter beta corrected to zero! Value: %f' % (arm_ca / np.pi * 180))
+            # elif arm_ca < 0:
+            #     print('Warning: undetected error, counter beta-> outer turning angle is negative! Value: ', arm_ca, arm_ca*180/np.pi, 'deg')
+            #     print('x_eval_c: ', x_eval_c)
+            #     print('x: ', x)
+            #     print('alpha_c[deg]: ', alpha_c*180/np.pi)
+            #     print('ang_diff_c[deg]: ', ang_diff_c_deg)
+            #     print('betas[deg]: ', np.asarray(betas) / np.pi * 180)
+            #     print('beta_c[deg]: ', beta_c_deg)
+            #     print('betas[deg] - beta_c: ', (np.asarray(betas) / np.pi * 180) - beta_c_deg)
 
             # If the outer (right) wheel angle is bigger than the border angle, the minimal turning radius is smaller
             # than the desired, which is not bad, but could cause large errors
