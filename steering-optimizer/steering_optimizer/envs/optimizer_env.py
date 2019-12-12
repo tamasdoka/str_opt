@@ -23,6 +23,7 @@ TRACK_WIDTH = 1200
 KINGPIN = 150
 TURNING_RADIUS = 4000
 EPISODE_LENGTH = 200
+MAX_ERROR = 10000
 
 
 class StrOptEnv(gym.Env):
@@ -122,6 +123,8 @@ class StrOptEnv(gym.Env):
         self.seed()
         self.viewer = None
         self.state = None
+        self.reward = None
+        self.error = None
 
         self.steps_beyond_done = None
         self.steps_since_reset = None
@@ -340,7 +343,7 @@ class StrOptEnv(gym.Env):
 
         if len(unique) != len(r_array_mod):
             done = True
-            error = 100000
+            error = MAX_ERROR
             print('Here is the problem!')
         else:
             error = np.trapz(error_array_mod * 100, r_array_mod * 100)
@@ -349,9 +352,9 @@ class StrOptEnv(gym.Env):
             self.state = (dx, dy, ax, ay)
 
             # Error is between 0 and 100000
-            if abs(error) > 100000:
+            if abs(error) > MAX_ERROR:
                 print('Top error reached', error)
-                error = 100000
+                error = MAX_ERROR
                 print('state: %f.3, %f.3, %f.3, %f.3' % dx, dy, ax, ay)
 
             # self.save_plot(error_array_mod, r_array_mod)
