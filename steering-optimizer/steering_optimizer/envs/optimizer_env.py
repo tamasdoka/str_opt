@@ -188,6 +188,8 @@ class StrOptEnv(gym.Env):
             else:
                 rack_travel = np.abs(rack_travel_max)
 
+        self.rack_travel = rack_travel
+
         # Initial angle relations: alpha is the angle of the TA line
         init_alpha_deg = np.arctan((self.KPLY - dy) / (self.KPLX - dx)) / np.pi * 180
         ang_diff_deg = beta_deg - init_alpha_deg
@@ -203,7 +205,7 @@ class StrOptEnv(gym.Env):
         k_array = np.array([])
 
         # Data point number of rack travel - turning angle curve
-        max_loop = 50
+        max_loop = 20
         loop_count = max_loop
 
         # We only check the turning angle error above minimal turning radius, so we throw away the unnecessary values
@@ -238,11 +240,21 @@ class StrOptEnv(gym.Env):
             c_sec = ct.Geometry().circle_intersection(c1, c2)
             betas = [np.arctan2(c_sec[1], c_sec[0]), np.arctan2(c_sec[3], c_sec[2])]
 
+            # TODO here could be the problem. Check how could arm_ca become negative.
+
             # Turning angle of the right wheel
             if ang_diff_c_rad < 0 and (betas[0] - alpha_c) < 0:
                 arm_ca = betas[0] - beta_c
             else:
                 arm_ca = betas[1] - beta_c
+
+            if arm_ca < 0 and round(arm_ca, 5) == 0:
+                print('Warning: counter beta turned negative! Value: %f' % (arm_ca/np.pi*180))
+                arm_ca = 0
+                print('Warning: counter beta corrected to zero! Value: %f' % (arm_ca / np.pi * 180))
+            elif arm_ca < 0:
+                print('Warning: undetected error, counter beta-> outer turning angle is negative! Value: ', arm_ca)
+
             # If the outer (right) wheel angle is bigger than the border angle, the minimal turning radius is smaller
             # than the desired, which is not bad, but could cause large errors
 
@@ -314,6 +326,8 @@ class StrOptEnv(gym.Env):
 
         done = None
 
+        #self.save_plot(error_array_mod, r_array_mod)
+
         unique = np.unique(r_array_mod)
 
         if len(unique) != len(r_array_mod):
@@ -326,6 +340,7 @@ class StrOptEnv(gym.Env):
             #self.check_error = error
             self.state = (dx, dy, ax, ay)
 
+            # Error is between 0 and 100000
             if abs(error) > 100000:
                 print('Top error reached', error)
                 error = 100000
@@ -503,7 +518,7 @@ class StrOptEnv(gym.Env):
         # Save error plot
         plt.plot(r_array/np.pi*180, error_array/np.pi*180)
         plt.axvline(x=self.border_ang/np.pi*180)
-        plt.axis([0, (self.border_ang/np.pi*180)+10, 0, 3])
+        plt.axis([20, (self.border_ang/np.pi*180)+1, 0, 0.2])
 
         filename = str(self.steps_since_reset) + '.png'
         pic = Path("pic/")
