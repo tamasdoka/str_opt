@@ -122,9 +122,11 @@ class StrOptEnv(gym.Env):
 
         self.seed()
         self.viewer = None
+
         self.state = None
         self.reward = None
         self.error = None
+        self.max_r = None
 
         self.steps_beyond_done = None
         self.steps_since_reset = None
@@ -208,7 +210,7 @@ class StrOptEnv(gym.Env):
         k_array = np.array([])
 
         # Data point number of rack travel - turning angle curve
-        max_loop = 20
+        max_loop = 50
         loop_count = max_loop
 
         # We only check the turning angle error above minimal turning radius, so we throw away the unnecessary values
@@ -337,7 +339,7 @@ class StrOptEnv(gym.Env):
 
         done = None
 
-        #self.save_plot(error_array_mod, r_array_mod)
+        # self.save_plot(error_array_mod, r_array_mod)
 
         unique = np.unique(r_array_mod)
 
@@ -367,32 +369,52 @@ class StrOptEnv(gym.Env):
             # error_orig = np.trapz(error_array, r_array)
 
             # TODO write a function for printing curve plots to file
-
             # self.save_plot(error_array, r_array)
 
+        # Getting the reward after action
+        # Scenario 1: Max turning angle is under border angle.
+        # This is the first step after initialization
+        if self.max_r is None:
+            reward = 0.0
+        elif max(r_array) <= self.border_ang:
+            # The max angle is bigger than the previous
+            if max(r_array) > self.max_r:
+                reward = 0.01
+            else:
+                reward = -0.01
+        # Scenario 2: Max turning angle is above border angle
+        else:
+            # After the applied action the error got smaller
+            if error < self.error:
+                reward = 1.0
+            # Being above max error, or consecutive no action (8)
+            elif error == self.error:
+                reward = -0.5
+            # Error is getting bigger -> wrong action to take
+            elif self.max_r <= self.border_ang:
+                reward = 0.01
+            else:
+                reward = -1.0
+
         self.state = (dx, dy, ax, ay)
+        self.max_r = max(r_array)
+        self.error = error
+
         # Stepping out of boundaries
         done = dx > 0 or dx < -self.TW / 2 \
                or ax > 0 or ax < -self.TW / 2 \
                or dy > self.TW / 2 or dy < -self.TW / 2 \
                or ay > self.TW / 2 or ay < -self.TW / 2 \
                or self.steps_since_reset > EPISODE_LENGTH \
-               or error < 0
+               or error < 0 or error == 0
         done = bool(done)
 
-        reward = 0.0
-
         if not done:
-            if error == 0:
-                print('Error == 0')
-                print('len error array', len(error_array))
-                print('integral chk', integral_check)
-            else:
-                reward = (1 / error) * 10000
-                # If the turning radius is above desired the reward function scales down
-                if max_turning_angle < self.border_ang:
-                    # However we must give a reward for going towards border angle
-                    reward = reward * 0.05 - reward * 0.02 * ((self.border_ang - max(r_array))/self.border_ang)
+            self.reward = reward
+            # If the turning radius is above desired the reward function scales down
+            #if max_turning_angle < self.border_ang:
+                # However we must give a reward for going towards border angle
+                #reward = reward * 0.05 - reward * 0.02 * ((self.border_ang - max(r_array)) / self.border_ang)
         elif self.steps_beyond_done is None:
             self.steps_beyond_done = 0
             reward = 0.0
@@ -412,6 +434,8 @@ class StrOptEnv(gym.Env):
     def reset(self):
         self.state = self.ackerman_state()
         self.steps_beyond_done = None
+        self.error = None
+        self.max_r = None
         self.steps_since_reset = 0
 
         return self.state
@@ -536,13 +560,4 @@ class StrOptEnv(gym.Env):
         pic_save_path = pic / filename
         plt.savefig(pic_save_path, bbox_inches='tight')
 
-    # def diag(self):
-    #     # Save error plot
-    #     plt.plot(r_array/np.pi*180, error_array/np.pi*180)
-    #     plt.axvline(x=self.border_ang/np.pi*180)
-    #     plt.axis([0, (self.border_ang/np.pi*180)+10, 0, 3])
-    #
-    #     filename = str(self.steps_since_reset) + '.png'
-    #     pic = Path("pic/")
-    #     pic_save_path = pic / filename
-    #     plt.savefig(pic_save_path, bbox_inches='tight')
+
