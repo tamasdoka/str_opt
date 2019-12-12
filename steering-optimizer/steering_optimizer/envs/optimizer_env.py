@@ -334,7 +334,14 @@ class StrOptEnv(gym.Env):
             f_inter = interp1d(border_x, border_y)
 
             # Calculating error at border angle
-            border_error = f_inter(self.border_ang)
+
+            if self.border_ang <= border_x[0] or self.border_ang >= border_x[1]:
+                print('border_ang error! It is not between %f and %f' % border_x[0], border_x[1])
+                print('border_and value: ', self.border_ang)
+
+                border_error = (error_array[(b_index - 1)] + error_array[b_index])/2
+            else:
+                border_error = f_inter(self.border_ang)
 
             error_array_mod = np.append(error_array_mod, border_error)
             r_array_mod = np.append(r_array_mod, self.border_ang)
