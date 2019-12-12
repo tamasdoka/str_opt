@@ -348,7 +348,9 @@ class StrOptEnv(gym.Env):
         if len(unique) != len(r_array_mod):
             done = True
             error = MAX_ERROR
-            print('Here is the problem!')
+            print('Here is the problem! -> not every angle value is unique')
+            print('r_array_mod', r_array_mod)
+            input('Press enter!')
         else:
             error = np.trapz(error_array_mod * 100, r_array_mod * 100)
 
@@ -402,14 +404,16 @@ class StrOptEnv(gym.Env):
         self.max_r = max(r_array)
         self.error = error
 
-        # Stepping out of boundaries
-        done = dx > 0 or dx < -self.TW / 2 \
-               or ax > 0 or ax < -self.TW / 2 \
-               or dy > self.TW / 2 or dy < -self.TW / 2 \
-               or ay > self.TW / 2 or ay < -self.TW / 2 \
-               or self.steps_since_reset > EPISODE_LENGTH \
-               or error < 0 or error == 0
-        done = bool(done)
+        if done is None:
+            # Stepping out of boundaries
+            done = dx > 0 or dx < -self.TW / 2 \
+                   or ax > 0 or ax < -self.TW / 2 \
+                   or dy > self.TW / 2 or dy < -self.TW / 2 \
+                   or ay > self.TW / 2 or ay < -self.TW / 2 \
+                   or self.steps_since_reset > EPISODE_LENGTH \
+                   or error < 0 or error == 0
+            done = bool(done)
+
 
         if not done:
             self.reward = reward
@@ -450,20 +454,40 @@ class StrOptEnv(gym.Env):
         amount = self.amount
         mod = np.array(state)
 
-        for i in range(0, 3, 1):
-            if action == i:
-                self.switch[i] = -1
-
-        for i in range(4, 7, 1):
-            if action == i:
-                self.switch[i-4] = 1
-
-        if action == 8:
-            self.switch = np.zeros((4,))
-
-        for i in range(4):
-            mod[i] = self.switch[i] * amount + state[i]
+        if action == 0:
+            mod[0] = state[0] - amount
+        elif action == 1:
+            mod[1] = state[1] - amount
+        elif action == 2:
+            mod[2] = state[2] - amount
+        elif action == 3:
+            mod[3] = state[3] - amount
+        elif action == 4:
+            mod[0] = state[0] + amount
+        elif action == 5:
+            mod[1] = state[1] + amount
+        elif action == 6:
+            mod[2] = state[2] + amount
+        elif action == 7:
+            mod[3] = state[3] + amount
+        elif action == 9:
+            return state
         return mod
+
+        # for i in range(0, 3, 1):
+        #     if action == i:
+        #         self.switch[i] = -1
+        #
+        # for i in range(4, 7, 1):
+        #     if action == i:
+        #         self.switch[i-4] = 1
+        #
+        # if action == 8:
+        #     self.switch = np.zeros((4,))
+        #
+        # for i in range(4):
+        #     mod[i] = self.switch[i] * amount + state[i]
+        # return mod
 
     def render(self, mode='human'):
         screen_width = 600
