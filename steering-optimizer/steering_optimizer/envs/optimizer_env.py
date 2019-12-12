@@ -8,13 +8,13 @@ import gym
 from gym import spaces, logger
 from gym.utils import seeding
 import numpy as np
+from scipy.optimize import minimize
 
 import circle_test as ct
 from matplotlib import pyplot as plt
 from pathlib import Path
 # For interpolation
 from scipy.interpolate import interp1d
-
 
 # Changing the 4 variables: raising or lowering
 N_DISCRETE_ACTIONS = 9
@@ -98,7 +98,6 @@ class StrOptEnv(gym.Env):
         self.KPLX = self.WLX + self.KP
         self.KPLY = self.WLY
 
-
         # Amount of increase or decrease
         self.amount = 1
         # Threshold for observations
@@ -107,15 +106,15 @@ class StrOptEnv(gym.Env):
         # Angle limit set to 2 * theta_threshold_radians so failing observation is still within bounds
         high = np.array([
             0 + x_threshold,
-            self.TW/2,
+            self.TW / 2,
             0 + x_threshold,
-            self.TW/2])
+            0 + x_threshold])
 
         low = np.array([
-            -self.TW/2,
-            -self.TW/2,
-            -self.TW/2,
-            -self.TW/2])
+            -self.TW / 2,
+            -self.TW / 2,
+            -self.TW / 2,
+            -self.TW / 2])
 
         self.action_space = spaces.Discrete(N_DISCRETE_ACTIONS)
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
@@ -152,9 +151,24 @@ class StrOptEnv(gym.Env):
         #### Action ###
         dx, dy, ax, ay = self._take_action(action, state)
 
+        # Initial TA distance
+        init_dist = np.sqrt((dx - ax) ** 2 + (dy - ay) ** 2)
+
         # initial (left) control arm length and angle
         arm_length = np.sqrt((ax - self.KPLX) ** 2 + (ay - self.KPLY) ** 2)
-        beta_deg = np.arctan2(ay, ax - self.KPLX)/np.pi*180
+
+        # TODO explain the geometrical background
+        # Invalid configuration.
+        if init_dist < arm_length:
+            print('Invalid configuration: arm is longer than initial distance')
+            self.error = MAX_ERROR
+            done = True
+            reward = -100
+
+            return np.array(self.state), reward, done, {}
+
+        # Control arm angles
+        beta_deg = np.arctan2(ay, ax - self.KPLX) / np.pi * 180
         beta = beta_deg / 180 * np.pi
         # initial (right - outer) control arm angle
         beta_c_deg = -180 - beta_deg
@@ -334,12 +348,12 @@ class StrOptEnv(gym.Env):
             f_inter = interp1d(border_x, border_y)
 
             # Calculating error at border angle
-
+            # TODO Not works properly!!! if border_angle is not valid, the error isn't valid
             if self.border_ang <= border_x[0] or self.border_ang >= border_x[1]:
                 print('border_ang error! It is not between %f and %f' % border_x[0], border_x[1])
                 print('border_and value: ', self.border_ang)
 
-                border_error = (error_array[(b_index - 1)] + error_array[b_index])/2
+                border_error = (error_array[(b_index - 1)] + error_array[b_index]) / 2
             else:
                 border_error = f_inter(self.border_ang)
 
@@ -367,20 +381,20 @@ class StrOptEnv(gym.Env):
         else:
             error = np.trapz(error_array_mod * 100, r_array_mod * 100)
 
-            #self.check_error = error
+            # self.check_error = error
             self.state = (dx, dy, ax, ay)
 
             # Error is between 0 and 100000
             if abs(error) > MAX_ERROR:
                 print('Top error reached', error)
                 error = MAX_ERROR
-                print('state: %f.3, %f.3, %f.3, %f.3' % dx, dy, ax, ay)
-
-            # self.save_plot(error_array_mod, r_array_mod)
 
             if error < 0:
                 print('Error is not valid!:', error)
                 print('Invalid state:', self.state)
+
+                self.save_plot(error_array_mod, r_array_mod, False)
+
 
             # Integrating the total error
             # error_orig = np.trapz(error_array, r_array)
@@ -422,18 +436,29 @@ class StrOptEnv(gym.Env):
             done = dx > 0 or dx < -self.TW / 2 \
                    or ax > 0 or ax < -self.TW / 2 \
                    or dy > self.TW / 2 or dy < -self.TW / 2 \
-                   or ay > self.TW / 2 or ay < -self.TW / 2 \
-                   or self.steps_since_reset > EPISODE_LENGTH \
-                   or error < 0 or error == 0
+                   or ay > self.TW / 2 or ay < -self.TW / 2
             done = bool(done)
 
+            if done:
+                ('step out of boundaries')
+
+            else:
+                done = self.steps_since_reset > EPISODE_LENGTH
+                done = bool(done)
+                if done:
+                    print('max steps occured')
+                else:
+                    done = error == 0
+                    done = bool(done)
+
+        # TODO error < 0 is not handled
 
         if not done:
             self.reward = reward
             # If the turning radius is above desired the reward function scales down
-            #if max_turning_angle < self.border_ang:
-                # However we must give a reward for going towards border angle
-                #reward = reward * 0.05 - reward * 0.02 * ((self.border_ang - max(r_array)) / self.border_ang)
+            # if max_turning_angle < self.border_ang:
+            # However we must give a reward for going towards border angle
+            # reward = reward * 0.05 - reward * 0.02 * ((self.border_ang - max(r_array)) / self.border_ang)
         elif self.steps_beyond_done is None:
             self.steps_beyond_done = 0
             reward = 0.0
@@ -448,7 +473,7 @@ class StrOptEnv(gym.Env):
             print('total reward after episode: ', self.total_reward)
 
         self.total_reward += reward
-        #print('total reward', self.total_reward)
+        # print('total reward', self.total_reward)
 
         return np.array(self.state), reward, done, {}
 
@@ -487,6 +512,8 @@ class StrOptEnv(gym.Env):
             return state
         return mod
 
+        ### SWITCH METHOD ###
+
         # for i in range(0, 3, 1):
         #     if action == i:
         #         self.switch[i] = -1
@@ -521,22 +548,21 @@ class StrOptEnv(gym.Env):
             self.viewer = rendering.Viewer(screen_width, screen_height)
 
             self.geometry = rendering.Line((self.KPLX,
-                                         self.state[2],
-                                         self.state[0],
-                                        -self.state[0],
-                                        -self.state[2],
-                                        -self.KPLX),
-                                        (self.KPLY,
-                                         self.state[3],
-                                         self.state[1],
-                                         self.state[1],
-                                         self.state[3],
-                                         self.KPLY))
+                                            self.state[2],
+                                            self.state[0],
+                                            -self.state[0],
+                                            -self.state[2],
+                                            -self.KPLX),
+                                           (self.KPLY,
+                                            self.state[3],
+                                            self.state[1],
+                                            self.state[1],
+                                            self.state[3],
+                                            self.KPLY))
             self.geometry.set_color(0, 0, 0)
             # self.geometrytrans = rendering.Transform()
             # self.geometry.add_attr(self.geometrytrans)
             self.viewer.add_geom(self.geometry)
-
 
             # l, r, t, b = -cartwidth / 2, cartwidth / 2, cartheight / 2, -cartheight / 2
             # axleoffset = cartheight / 4.0
@@ -579,23 +605,30 @@ class StrOptEnv(gym.Env):
             self.viewer.close()
             self.viewer = None
 
-    def ackerman_state(self):
-        length = 100 + np.random.uniform(-1.0, 1.0) * 20
-        ackerman_angle = np.arctan2(-2 * self.WB, self.TW)
+    def ackerman_state(self, random=True):
+        if random:
+            length = 100 + np.random.uniform(-1.0, 1.0) * 20
+            rack_x = -100 + np.random.uniform(-1.0, 1.0) * 20
+            rack_y = -200 + np.random.uniform(-1.0, 1.0) * 20
 
+        else:
+            length = 100
+            rack_x = -100
+            rack_y = -200
+
+        ackerman_angle = np.arctan2(-2 * self.WB, self.TW)
         ax0 = self.KPLX + length * np.cos(ackerman_angle)
         ay0 = self.KPLY + length * np.sin(ackerman_angle)
-        rack_x = -100 + np.random.uniform(-1.0, 1.0) * 20
-        rack_y = -200 + np.random.uniform(-1.0, 1.0) * 20
-
         state = np.array([rack_x, rack_y, ax0, ay0])
+
         return state
 
-    def save_plot(self, error_array, r_array):
+    def save_plot(self, error_array, r_array, sized=True):
         # Save error plot
-        plt.plot(r_array/np.pi*180, error_array/np.pi*180)
-        plt.axvline(x=self.border_ang/np.pi*180)
-        plt.axis([20, (self.border_ang/np.pi*180)+1, 0, 0.2])
+        plt.plot(r_array / np.pi * 180, error_array / np.pi * 180)
+        plt.axvline(x=self.border_ang / np.pi * 180)
+        if sized:
+            plt.axis([20, (self.border_ang / np.pi * 180) + 1, 0, 0.2])
 
         filename = str(self.steps_since_reset) + '.png'
         pic = Path("pic/")
@@ -606,4 +639,23 @@ class StrOptEnv(gym.Env):
         # Print version
         print('StrOpt version: dev')
 
+    def objective(self, x):
+        self.reset()
+        self.state = x
+        # No action during step
+        self.step(8)
 
+        return self.error
+
+    def geometry_optimize(self):
+        # Lower and upper bounds
+        b1 = (-self.TW / 2, 0)
+        b2 = (-self.TW / 2, self.TW / 2)
+        b3 = (-self.TW / 2, 0)
+        bnds = (b1, b2, b1, b3)
+        # Initial position
+        initial_state = self.ackerman_state(False)
+
+        solution = minimize(self.objective, initial_state, method='SLSQP', bounds=bnds)
+
+        return solution
