@@ -212,7 +212,7 @@ class StrOptEnv(gym.Env):
         k_array = np.array([])
 
         # Data point number of rack travel - turning angle curve
-        max_loop = 50
+        max_loop = 15
         loop_count = max_loop
 
         # We only check the turning angle error above minimal turning radius, so we throw away the unnecessary values
@@ -239,6 +239,9 @@ class StrOptEnv(gym.Env):
             else:
                 arm_a = betas[1] - beta
 
+            if arm_a < 0 and round(arm_a, 5) == 0:
+                arm_a = 0
+
             # Rack other side position
             x_eval_c = -dx + x
 
@@ -252,9 +255,12 @@ class StrOptEnv(gym.Env):
 
             # Turning angle of the right wheel
             if ang_diff_c_rad > 0 and betas[0] - alpha_c >= 0:
-                arm_ca = round(betas[0] - beta_c, 5)
+                arm_ca = betas[0] - beta_c
             else:
-                arm_ca = round(betas[1] - beta_c, 5)
+                arm_ca = betas[1] - beta_c
+
+            if arm_ca < 0 and round(arm_ca, 5) == 0:
+                arm_ca = 0
 
             # if arm_ca < 0 and round(arm_ca, 5) == 0:
             #     #print('Warning: counter beta turned negative! Value: %f' % (arm_ca/np.pi*180))
