@@ -128,6 +128,8 @@ class StrOptEnv(gym.Env):
         self.error = None
         self.max_r = None
 
+        self.total_reward = None
+
         self.steps_beyond_done = None
         self.steps_since_reset = None
 
@@ -426,8 +428,10 @@ class StrOptEnv(gym.Env):
                     "-- any further steps are undefined behavior.")
             self.steps_beyond_done += 1
             reward = 0.0
+            print('total reward after episode: ', self.total_reward)
 
-        #print('reward', reward)
+        self.total_reward += reward
+        #print('total reward', self.total_reward)
 
         return np.array(self.state), reward, done, {}
 
@@ -437,6 +441,7 @@ class StrOptEnv(gym.Env):
         self.error = None
         self.max_r = None
         self.steps_since_reset = 0
+        self.total_reward = 0
 
         return self.state
 
