@@ -491,7 +491,7 @@ class StrOptEnv(gym.Env):
                     "-- any further steps are undefined behavior.")
             self.steps_beyond_done += 1
             reward = 0.0
-            print('total reward after episode: ', self.total_reward)
+            #print('total reward after episode: ', self.total_reward)
 
         self.total_reward += reward
         # print('total reward', self.total_reward)
