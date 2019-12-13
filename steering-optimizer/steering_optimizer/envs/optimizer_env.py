@@ -17,14 +17,14 @@ from pathlib import Path
 from scipy.interpolate import interp1d
 
 # Changing the 4 variables: raising or lowering
-N_DISCRETE_ACTIONS = 3
+N_DISCRETE_ACTIONS = 9
 WHEELBASE = 1900
 TRACK_WIDTH = 1200
 KINGPIN = 150
 TURNING_RADIUS = 4000
-EPISODE_LENGTH = 500
+EPISODE_LENGTH = 1000
 MAX_ERROR = 10000
-ERROR_THRESHOLD = 1
+ERROR_THRESHOLD = 0.7
 
 
 class StrOptEnv(gym.Env):
@@ -100,7 +100,7 @@ class StrOptEnv(gym.Env):
         self.KPLY = self.WLY
 
         # Amount of increase or decrease
-        self.amount = 1
+        self.amount = 10
         # Threshold for observations
         x_threshold = 2 * self.amount
 
@@ -161,10 +161,12 @@ class StrOptEnv(gym.Env):
         # TODO explain the geometrical background
         # Invalid configuration.
         if init_dist < arm_length:
-            print('Invalid configuration: arm is longer than initial distance')
+            #print('Invalid configuration: arm is longer than initial distance')
             self.error = MAX_ERROR
             done = True
             reward = -5.0
+
+            self.state = self.ackerman_state(True)
 
             return np.array(self.state), reward, done, {}
 
@@ -353,11 +355,20 @@ class StrOptEnv(gym.Env):
             # Calculating error at border angle
             # TODO Not works properly!!! if border_angle is not valid, the error isn't valid
             if self.border_ang <= border_x[0] or self.border_ang >= border_x[1]:
-                print('border_ang error! It is not between borders', border_x)
-                print('border_ang value: ', self.border_ang)
-                print('Integral check ', integral_check)
 
-                border_error = (error_array[(b_index - 1)] + error_array[b_index]) / 2
+                self.error = MAX_ERROR
+                done = True
+                reward = -5.0
+
+                self.state = self.ackerman_state(True)
+
+                return np.array(self.state), reward, done, {}
+
+                #print('border_ang error! It is not between borders', border_x)
+                #print('border_ang value: ', self.border_ang)
+                #print('Integral check ', integral_check)
+
+                #border_error = (error_array[(b_index - 1)] + error_array[b_index]) / 2
             else:
                 border_error = f_inter(self.border_ang)
 
@@ -381,7 +392,7 @@ class StrOptEnv(gym.Env):
             error = MAX_ERROR
             print('Here is the problem! -> not every angle value is unique')
             print('r_array_mod', r_array_mod)
-            input('Press enter!')
+            #input('Press enter!')
         else:
             error = np.trapz(error_array_mod * 180/np.pi, r_array_mod * 180/np.pi)
 
@@ -397,7 +408,7 @@ class StrOptEnv(gym.Env):
                 print('Error is not valid!:', error)
                 print('Invalid state:', self.state)
 
-                self.save_plot(error_array_mod, r_array_mod, False)
+                #self.save_plot(error_array_mod, r_array_mod, False)
 
 
             # Integrating the total error
@@ -456,7 +467,7 @@ class StrOptEnv(gym.Env):
                 done = self.steps_since_reset > EPISODE_LENGTH
                 done = bool(done)
                 if done:
-                    print('max steps occured')
+                    print('Episode ended')
                 else:
                     done = error == 0
                     done = bool(done)
