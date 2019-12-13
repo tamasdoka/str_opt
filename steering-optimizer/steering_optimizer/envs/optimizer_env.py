@@ -24,6 +24,7 @@ KINGPIN = 150
 TURNING_RADIUS = 4000
 EPISODE_LENGTH = 1200
 MAX_ERROR = 10000
+ERROR_THRESHOLD = 1
 
 
 class StrOptEnv(gym.Env):
@@ -163,7 +164,7 @@ class StrOptEnv(gym.Env):
             print('Invalid configuration: arm is longer than initial distance')
             self.error = MAX_ERROR
             done = True
-            reward = -100
+            reward = -2.0
 
             return np.array(self.state), reward, done, {}
 
@@ -431,6 +432,10 @@ class StrOptEnv(gym.Env):
         self.state = (dx, dy, ax, ay)
         self.max_r = max(r_array)
         self.error = error
+
+        if error < ERROR_THRESHOLD:
+            done = True
+            reward = 100
 
         if done is None:
             # Stepping out of boundaries
