@@ -147,8 +147,7 @@ class StrOptEnv(gym.Env):
 
         self.steps_since_reset += 1
 
-        # MODIFIED STATE!!!
-        state = np.asarray(self.state) * self.TW / 2
+        state = self.state
 
         #### Action ###
         dx, dy, ax, ay = self._take_action(action, state)
@@ -486,8 +485,7 @@ class StrOptEnv(gym.Env):
         self.total_reward += reward
         # print('total reward', self.total_reward)
 
-        ### MODIFIED STATE!!!
-        self.state = np.asarray(self.state) / self.TW * 2
+        self.state = self.state
 
         return np.array(self.state), reward, done, {}
 
@@ -499,8 +497,7 @@ class StrOptEnv(gym.Env):
         self.steps_since_reset = 0
         self.total_reward = 0
 
-        ### MODIFIED STATE!!!!
-        return np.asarray(self.state) / self.TW * 2
+        return self.state
 
     def _take_action(self, action, state):
 
