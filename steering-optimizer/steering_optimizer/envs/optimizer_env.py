@@ -17,7 +17,7 @@ from pathlib import Path
 from scipy.interpolate import interp1d
 
 # Changing the 4 variables: raising or lowering
-N_DISCRETE_ACTIONS = 5
+N_DISCRETE_ACTIONS = 3
 WHEELBASE = 1900
 TRACK_WIDTH = 1200
 KINGPIN = 150
@@ -147,7 +147,8 @@ class StrOptEnv(gym.Env):
 
         self.steps_since_reset += 1
 
-        state = self.state
+        # MODIFIED STATE!!!
+        state = np.asarray(self.state) * self.TW / 2
 
         #### Action ###
         dx, dy, ax, ay = self._take_action(action, state)
@@ -164,7 +165,7 @@ class StrOptEnv(gym.Env):
             print('Invalid configuration: arm is longer than initial distance')
             self.error = MAX_ERROR
             done = True
-            reward = -2.0
+            reward = -5.0
 
             return np.array(self.state), reward, done, {}
 
@@ -295,6 +296,8 @@ class StrOptEnv(gym.Env):
             # than the desired, which is not bad, but could cause large errors
 
             # Over the border angle
+
+            # Over the border angle
             if arm_ca > self.border_ang:
                 integral_check += 1
 
@@ -413,6 +416,8 @@ class StrOptEnv(gym.Env):
             # The max angle is bigger than the previous
             if max(r_array) > self.max_r:
                 reward = 0.01
+            elif error == self.error:
+                reward = -0.0005
             else:
                 reward = -0.01
         # Scenario 2: Max turning angle is above border angle
@@ -422,12 +427,12 @@ class StrOptEnv(gym.Env):
                 reward = 1.0
             # Being above max error, or consecutive no action (8)
             elif error == self.error:
-                reward = -0.5
+                reward = -0.05
             # Error is getting bigger -> wrong action to take
             elif self.max_r <= self.border_ang:
                 reward = 0.01
             else:
-                reward = -1.0
+                reward = -0.5
 
         self.state = (dx, dy, ax, ay)
         self.max_r = max(r_array)
@@ -481,6 +486,9 @@ class StrOptEnv(gym.Env):
         self.total_reward += reward
         # print('total reward', self.total_reward)
 
+        ### MODIFIED STATE!!!
+        self.state = np.asarray(self.state) / self.TW * 2
+
         return np.array(self.state), reward, done, {}
 
     def reset(self):
@@ -491,7 +499,8 @@ class StrOptEnv(gym.Env):
         self.steps_since_reset = 0
         self.total_reward = 0
 
-        return self.state
+        ### MODIFIED STATE!!!!
+        return np.asarray(self.state) / self.TW * 2
 
     def _take_action(self, action, state):
 
