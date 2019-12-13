@@ -226,7 +226,7 @@ class StrOptEnv(gym.Env):
         k_array = np.array([])
 
         # Data point number of rack travel - turning angle curve
-        max_loop = 15
+        max_loop = 50
         loop_count = max_loop
 
         # We only check the turning angle error above minimal turning radius, so we throw away the unnecessary values
@@ -350,8 +350,9 @@ class StrOptEnv(gym.Env):
             # Calculating error at border angle
             # TODO Not works properly!!! if border_angle is not valid, the error isn't valid
             if self.border_ang <= border_x[0] or self.border_ang >= border_x[1]:
-                print('border_ang error! It is not between %f and %f' % border_x[0], border_x[1])
-                print('border_and value: ', self.border_ang)
+                print('border_ang error! It is not between borders', border_x)
+                print('border_ang value: ', self.border_ang)
+                print('Integral check ', integral_check)
 
                 border_error = (error_array[(b_index - 1)] + error_array[b_index]) / 2
             else:
@@ -379,7 +380,7 @@ class StrOptEnv(gym.Env):
             print('r_array_mod', r_array_mod)
             input('Press enter!')
         else:
-            error = np.trapz(error_array_mod * 100, r_array_mod * 100)
+            error = np.trapz(error_array_mod * 180/np.pi, r_array_mod * 180/np.pi)
 
             # self.check_error = error
             self.state = (dx, dy, ax, ay)
@@ -644,6 +645,9 @@ class StrOptEnv(gym.Env):
         self.state = x
         # No action during step
         self.step(8)
+
+        if self.border_ang > self.max_r:
+            self.error += (self.border_ang - self.max_r)*max(self.check_error)*(180/np.pi)**2
 
         return self.error
 
