@@ -17,12 +17,12 @@ from pathlib import Path
 from scipy.interpolate import interp1d
 
 # Changing the 4 variables: raising or lowering
-N_DISCRETE_ACTIONS = 9
+N_DISCRETE_ACTIONS = 5
 WHEELBASE = 1900
 TRACK_WIDTH = 1200
 KINGPIN = 150
 TURNING_RADIUS = 4000
-EPISODE_LENGTH = 200
+EPISODE_LENGTH = 600
 MAX_ERROR = 10000
 
 
@@ -494,23 +494,23 @@ class StrOptEnv(gym.Env):
         mod = np.array(state)
 
         if action == 0:
-            mod[0] = state[0] - amount
+            return state
         elif action == 1:
-            mod[1] = state[1] - amount
+            mod[0] = state[0] - amount
         elif action == 2:
-            mod[2] = state[2] - amount
-        elif action == 3:
-            mod[3] = state[3] - amount
-        elif action == 4:
             mod[0] = state[0] + amount
-        elif action == 5:
+        elif action == 3:
+            mod[1] = state[1] - amount
+        elif action == 4:
             mod[1] = state[1] + amount
+        elif action == 5:
+            mod[2] = state[2] - amount
         elif action == 6:
             mod[2] = state[2] + amount
         elif action == 7:
+            mod[3] = state[3] - amount
+        elif action == 8:
             mod[3] = state[3] + amount
-        elif action == 9:
-            return state
         return mod
 
         ### SWITCH METHOD ###
@@ -644,7 +644,7 @@ class StrOptEnv(gym.Env):
         self.reset()
         self.state = x
         # No action during step
-        self.step(8)
+        self.step(0)
 
         if self.border_ang > self.max_r:
             self.error += (self.border_ang - self.max_r)*max(self.check_error)*(180/np.pi)**2
