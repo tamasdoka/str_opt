@@ -24,7 +24,14 @@ KINGPIN = 150
 TURNING_RADIUS = 4000
 EPISODE_LENGTH = 1000
 MAX_ERROR = 10000
-ERROR_THRESHOLD = 0.7
+ERROR_THRESHOLD = 0.0000001
+MAX_LOOP = 50
+
+
+def angle_chop(angle):
+    chop = (angle*180/np.pi) % (np.sign(angle)*180)*np.pi/180
+    real = -np.sign(angle)*np.pi + chop
+    return real
 
 
 class StrOptEnv(gym.Env):
@@ -100,7 +107,7 @@ class StrOptEnv(gym.Env):
         self.KPLY = self.WLY
 
         # Amount of increase or decrease
-        self.amount = 10
+        self.amount = 5
         # Threshold for observations
         x_threshold = 2 * self.amount
 
@@ -147,10 +154,26 @@ class StrOptEnv(gym.Env):
 
         self.steps_since_reset += 1
 
+        done = None
+
         state = self.state
 
         #### Action ###
         dx, dy, ax, ay = self._take_action(action, state)
+
+        # Stepping out of boundaries
+        done = dx > 0 or dx < -self.TW / 2 \
+               or ax > 0 or ax < -self.TW / 2 \
+               or dy > self.TW / 2 or dy < -self.TW / 2 \
+               or ay > self.TW / 2 or ay < -self.TW / 2
+
+        done = bool(done)
+
+        if done:
+            #print('Done: step out of boundaries')
+            reward = -10
+            return np.array(self.state), reward, done, {}
+
 
         # Initial TA distance
         init_dist = np.sqrt((dx - ax) ** 2 + (dy - ay) ** 2)
@@ -160,22 +183,24 @@ class StrOptEnv(gym.Env):
 
         # TODO explain the geometrical background
         # Invalid configuration.
-        if init_dist < arm_length:
-            #print('Invalid configuration: arm is longer than initial distance')
-            self.error = MAX_ERROR
-            done = True
-            reward = -5.0
+        # if init_dist < arm_length:
+        #     print('Invalid configuration: arm is longer than initial distance')
+        #     self.error = MAX_ERROR
+        #     done = True
+        #     reward = -5.0
+        #
+        #     #WITHOUT RESETTING!!!!
+        #     #self.state = self.ackerman_state(True)
+        #
+        #     return np.array(self.state), reward, done, {}
 
-            self.state = self.ackerman_state(True)
-
-            return np.array(self.state), reward, done, {}
-
-        # Control arm angles
-        beta_deg = np.arctan2(ay, ax - self.KPLX) / np.pi * 180
-        beta = beta_deg / 180 * np.pi
+        beta = np.arctan2(ay, ax - self.KPLX)
+        beta_deg = beta * 180 / np.pi
         # initial (right - outer) control arm angle
-        beta_c_deg = -180 - beta_deg
-        beta_c = beta_c_deg / 180 * np.pi
+        beta_c = np.sign(beta)*np.pi - beta
+        beta_c_deg = beta_c * 180 / np.pi
+
+        #print('initial beta and beta_c', beta_deg, beta_c_deg, 'since reset', self.steps_since_reset, '%f, %f, %f, %f' % (dx, dy, ax, ay))
 
         # Tierod length
         tierod_length = np.sqrt(np.power((ax - dx), 2) + np.power((ay - dy), 2))
@@ -206,7 +231,8 @@ class StrOptEnv(gym.Env):
             min_ta_distance_x_coord = min_ta_distance_x + self.KPLX
             rack_travel_min = min_ta_distance_x_coord - dx
 
-            # Locating the unstable configuration and choosing what we could reach sooner as rack travel in each direction
+            # Locating the unstable configuration and choosing what we could reach sooner as rack travel in each
+            # direction
             if np.abs(rack_travel_max) > np.abs(rack_travel_min):
                 rack_travel = np.abs(rack_travel_min)
             else:
@@ -215,11 +241,35 @@ class StrOptEnv(gym.Env):
         self.rack_travel = rack_travel
 
         # Initial angle relations: alpha is the angle of the TA line
-        init_alpha_deg = np.arctan((-self.KPLY + dy) / (-self.KPLX + dx)) / np.pi * 180
+        init_alpha_deg = np.arctan2((-self.KPLY + dy), (-self.KPLX + dx)) / np.pi * 180
+
+        # if init_alpha_deg > 0:
+        #     print('wrong_alpha', init_alpha_deg)
+        #     print('dx, dy, ax, ay', dx, dy, ax, ay)
+
         ang_diff_deg = beta_deg - init_alpha_deg
         ang_diff_rad = ang_diff_deg / 180 * np.pi
-        ang_diff_c_deg = beta_c_deg - init_alpha_deg
+        # ang_diff_c_deg = beta_c_deg - init_alpha_deg
+        ang_diff_c_deg = beta_c_deg - (np.sign(beta_deg)*180 - init_alpha_deg)
         ang_diff_c_rad = ang_diff_c_deg / 180 * np.pi
+
+        if np.sign(init_alpha_deg) == np.sign(beta_deg) and abs(init_alpha_deg) >= abs(beta_deg):
+            done = True
+            reward = -10
+            #print('Done: not coherent turning direction')
+            return np.array(self.state), reward, done, {}
+
+        # setting direction of rack moving
+        direction = 1
+
+        if np.sign(beta) <= 0:
+
+            direction = 1
+        else:
+            direction = -1
+
+        if round(ang_diff_deg + ang_diff_c_deg, 5) != 0:
+            print('Messed up initial condition!', ang_diff_deg, ang_diff_c_deg)
 
         # Rack travel from initial position
         x = 0
@@ -228,9 +278,13 @@ class StrOptEnv(gym.Env):
         r_array = np.array([])
         k_array = np.array([])
 
+        diag_array = np.array([])
+
         # Data point number of rack travel - turning angle curve
-        max_loop = 50
+        max_loop = MAX_LOOP
         loop_count = max_loop
+
+        mark = None
 
         # We only check the turning angle error above minimal turning radius, so we throw away the unnecessary values
         integral_check = 0
@@ -243,6 +297,10 @@ class StrOptEnv(gym.Env):
             # The actual TA line angle
             alpha = np.arctan2((-self.KPLY + dy), (-self.KPLX + x_eval))
 
+            if alpha > np.pi:
+                print('alpha error in loop calculation!')
+                #alpha -= 2 * np.pi
+
             # Circles around the kingpin (A) and the left tierod endpoint (T)
             c1 = [0, 0, arm_length]
             c2 = [x_eval - self.KPLX, dy - self.KPLY, tierod_length]
@@ -250,8 +308,12 @@ class StrOptEnv(gym.Env):
             c_sec = ct.Geometry().circle_intersection(c1, c2)
             betas = [np.arctan2(c_sec[1], c_sec[0]), np.arctan2(c_sec[3], c_sec[2])]
 
+            # TODO all angles should be between -180 and 180
+
+            diff = betas[0] - alpha
+
             # Turning angle of the left wheel
-            if ang_diff_rad < 0 and (betas[0] - alpha) < 0:
+            if np.sign(ang_diff_rad) == np.sign(diff):
                 arm_a = betas[0] - beta
             else:
                 arm_a = betas[1] - beta
@@ -262,53 +324,108 @@ class StrOptEnv(gym.Env):
             # Rack other side position
             x_eval_c = -dx + x
 
-            alpha_c = np.arctan2((-self.KPLY + dy), (self.KPLX + x_eval_c))
+            alpha_c = np.arctan2((self.KPLY + dy), (self.KPLX + x_eval_c))
+
+            if alpha_c > np.pi:
+                alpha_c -= 2 * np.pi
+
             c1 = [0, 0, arm_length]
-            c2 = [x_eval_c + self.KPLX, dy - self.KPLY, tierod_length]
+            c2 = [x_eval_c + self.KPLX, dy + self.KPLY, tierod_length]
             c_sec = ct.Geometry().circle_intersection(c1, c2)
             betas = [np.arctan2(c_sec[1], c_sec[0]), np.arctan2(c_sec[3], c_sec[2])]
 
-            # TODO here could be the problem. Check how could arm_ca become negative.
+            # TODO : IT IS A FORCED SOLUTION
+            diff_c = angle_chop(round(betas[0] - alpha_c, 5))
 
-            # Turning angle of the right wheel
-            if ang_diff_c_rad > 0 and betas[0] - alpha_c >= 0:
-                arm_ca = betas[0] - beta_c
+            if x == 0:
+                if round(betas[0] - beta_c, 3) == 0.000:
+                    mark = False
+                    arm_ca = betas[0] - beta_c
+                else:
+                    mark = True
+                    arm_ca = betas[1] - beta_c
             else:
-                arm_ca = betas[1] - beta_c
+                if mark:
+                    arm_ca = betas[1] - beta_c
+                else:
+                    arm_ca = betas[0] - beta_c
+
+            # TODO : FORCED SOLUTION END
+            # Turning angle of the right wheel
+            # if ((np.sign(ang_diff_c_rad) == np.sign(diff_c)) and (round(betas[1], 5) != round(beta_c, 5))) or (round(betas[0], 5) == round(beta_c, 5)):
+            #     arm_ca = betas[0] - beta_c
+            #     diag_array = np.append(diag_array, 0)
+            # else:
+            #     arm_ca = betas[1] - beta_c
+            #     diag_array = np.append(diag_array, 1)
+
+            if x == 0 and round(arm_ca, 5) != 0:
+                print('Bad front facing because of betas!')
+                print('Mark', mark)
+                print('steps since reset', self.steps_since_reset)
+                print(diff_c)
+                print('signs of operands', np.sign(ang_diff_c_rad), np.sign(diff_c))
+                print('Possible ARMS_ca', (betas[0] - beta_c)*180/np.pi, (betas[1] - beta_c)*180/np.pi)
+                print('ARM_ca', arm_ca * 180 / np.pi)
+                print('angdiff_c, 0:', ang_diff_c_deg, angle_chop(betas[0] - alpha_c) * 180 / np.pi)
+                print('angdiff_c, 1:', ang_diff_c_deg, angle_chop(betas[1] - alpha_c) * 180 / np.pi)
+                print('initalpha, alpha_c, betadeg, beta_c', init_alpha_deg, alpha_c*180/np.pi, beta_deg, beta_c_deg)
+                print('diff_calc', - (np.sign(beta_deg)*180 - init_alpha_deg))
 
             if arm_ca < 0 and round(arm_ca, 5) == 0:
                 arm_ca = 0
 
-            # if arm_ca < 0 and round(arm_ca, 5) == 0:
-            #     #print('Warning: counter beta turned negative! Value: %f' % (arm_ca/np.pi*180))
-            #     arm_ca = 0
-            #     #print('Warning: counter beta corrected to zero! Value: %f' % (arm_ca / np.pi * 180))
-            # elif arm_ca < 0:
-            #     print('Warning: undetected error, counter beta-> outer turning angle is negative! Value: ', arm_ca, arm_ca*180/np.pi, 'deg')
-            #     print('x_eval_c: ', x_eval_c)
-            #     print('x: ', x)
-            #     print('alpha_c[deg]: ', alpha_c*180/np.pi)
-            #     print('ang_diff_c[deg]: ', ang_diff_c_deg)
-            #     print('betas[deg]: ', np.asarray(betas) / np.pi * 180)
-            #     print('beta_c[deg]: ', beta_c_deg)
-            #     print('betas[deg] - beta_c: ', (np.asarray(betas) / np.pi * 180) - beta_c_deg)
+            if abs(arm_ca) > np.pi:
+                #print('Possible ARMS_ca', (betas[0] - beta_c)*180/np.pi, (betas[1] - beta_c)*180/np.pi)
+                #print('Possible ARMS_ca chop', angle_chop(betas[0] - beta_c) * 180 / np.pi, angle_chop(betas[1] - beta_c) * 180 / np.pi)
+                arm_ca = angle_chop(arm_ca)
 
             # If the outer (right) wheel angle is bigger than the border angle, the minimal turning radius is smaller
             # than the desired, which is not bad, but could cause large errors
 
             # Over the border angle
-
-            # Over the border angle
             if arm_ca > self.border_ang:
+
+                if x == 0:
+                    print('Front facing is not zero')
+                    print('ARM, border', arm_ca*180/np.pi, self.border_ang/np.pi*180, loop_count)
+                    print('initial beta and beta_c', beta_deg, beta_c_deg)
+                    print('alpha', init_alpha_deg, alpha*180/np.pi)
+                    print('alpha_c', -180 - init_alpha_deg, alpha_c * 180 / np.pi)
+                    print('betas:', betas[0] * 180 / np.pi, betas[1] * 180 / np.pi)
+                    print('angdiff_c, 0:', ang_diff_c_deg, (betas[0] - alpha_c) * 180 / np.pi)
+                    print('angdiff_c, 1:', ang_diff_c_deg, (betas[1] - alpha_c) * 180 / np.pi)
+                    print('Front facing is not zero')
+
                 integral_check += 1
+                #print('arm_ca', arm_ca*180/np.pi, integral_check)
 
             # Storing the angle values corresponding to the rack positions
             l_array = np.append(l_array, arm_a)
             r_array = np.append(r_array, arm_ca)
 
-            x = x + (rack_travel / max_loop)
+            #diag_array = np.append(diag_array, diff_c)
+
+            x = x + (rack_travel / max_loop)*direction
 
             loop_count = loop_count - 1
+
+        # Checking if r_array is monotonic, if not the solution is bad
+
+        def isMonotonic(A):
+
+            return (all(A[i] <= A[i + 1] for i in range(len(A) - 1)) or all(A[i] >= A[i + 1] for i in range(len(A) - 1)))
+
+        if isMonotonic(r_array) is False:
+            print('Not monotonic! -> Bad configuration! loop:', loop_count)
+            print('angdiff_c, 0:', ang_diff_c_deg, angle_chop(betas[0] - alpha_c) * 180 / np.pi)
+            print('angdiff_c, 1:', ang_diff_c_deg, angle_chop(betas[1] - alpha_c) * 180 / np.pi)
+            print('initial beta and beta_c', beta_deg, beta_c_deg)
+            print(r_array*180/np.pi)
+            print(diag_array)
+            done = True
+            reward = 0.0
+            return np.array(self.state), reward, done, {}
 
         # For every given position
         for i in range(0, len(x_array), 1):
@@ -358,15 +475,27 @@ class StrOptEnv(gym.Env):
 
                 self.error = MAX_ERROR
                 done = True
+                print('Done: Border angle error')
                 reward = -5.0
 
-                self.state = self.ackerman_state(True)
+                print('border_ang error! It is not between borders', border_x)
+                print('border_ang value: ', self.border_ang)
+                print('border_ang value: ', self.border_ang*180/np.pi)
+                print('b_index ', b_index)
+                print('Integral check ', integral_check)
+                print(r_array[b_index - 2])
+                print(r_array[b_index - 1])
+                print(r_array[b_index])
+                print(r_array[b_index + 1])
+                #print(r_array_mod)
+
+
+                # WITHOUT RESETTING ENV!!!
+                #self.state = self.ackerman_state(True)
 
                 return np.array(self.state), reward, done, {}
 
-                #print('border_ang error! It is not between borders', border_x)
-                #print('border_ang value: ', self.border_ang)
-                #print('Integral check ', integral_check)
+
 
                 #border_error = (error_array[(b_index - 1)] + error_array[b_index]) / 2
             else:
@@ -381,7 +510,7 @@ class StrOptEnv(gym.Env):
         self.check_error = error_array_mod
         self.check_r = r_array_mod
 
-        done = None
+
 
         # self.save_plot(error_array_mod, r_array_mod)
 
@@ -389,6 +518,8 @@ class StrOptEnv(gym.Env):
 
         if len(unique) != len(r_array_mod):
             done = True
+
+            print('Done: Array length error')
             error = MAX_ERROR
             print('Here is the problem! -> not every angle value is unique')
             print('r_array_mod', r_array_mod)
@@ -400,12 +531,14 @@ class StrOptEnv(gym.Env):
             self.state = (dx, dy, ax, ay)
 
             # Error is between 0 and 100000
-            if abs(error) > MAX_ERROR:
-                print('Top error reached', error)
-                error = MAX_ERROR
+            #if abs(error) > MAX_ERROR:
+            #    print('Top error reached', error)
+            #    error = MAX_ERROR
 
             if error < 0:
                 print('Error is not valid!:', error)
+                print(self.check_r)
+                print(self.check_error)
                 print('Invalid state:', self.state)
 
                 #self.save_plot(error_array_mod, r_array_mod, False)
@@ -448,29 +581,20 @@ class StrOptEnv(gym.Env):
         self.max_r = max(r_array)
         self.error = error
 
-        if error < ERROR_THRESHOLD:
+        if error < ERROR_THRESHOLD and self.max_r > self.border_ang:
             done = True
+            print('Done: Reached error threshold!')
             reward = 100
 
         if done is None:
-            # Stepping out of boundaries
-            done = dx > 0 or dx < -self.TW / 2 \
-                   or ax > 0 or ax < -self.TW / 2 \
-                   or dy > self.TW / 2 or dy < -self.TW / 2 \
-                   or ay > self.TW / 2 or ay < -self.TW / 2
+
+            done = self.steps_since_reset > EPISODE_LENGTH
             done = bool(done)
-
             if done:
-                ('step out of boundaries')
-
+                print('Done: Episode ended')
             else:
-                done = self.steps_since_reset > EPISODE_LENGTH
+                done = error == 0
                 done = bool(done)
-                if done:
-                    print('Episode ended')
-                else:
-                    done = error == 0
-                    done = bool(done)
 
         # TODO error < 0 is not handled
 
@@ -630,16 +754,25 @@ class StrOptEnv(gym.Env):
 
     def ackerman_state(self, random=True):
         if random:
-            length = 100 + np.random.uniform(-1.0, 1.0) * 20
-            rack_x = -100 + np.random.uniform(-1.0, 1.0) * 20
-            rack_y = -200 + np.random.uniform(-1.0, 1.0) * 20
+            # length = 100 + np.random.uniform(-1.0, 1.0) * 20
+            # rack_x = -100 + np.random.uniform(-1.0, 1.0) * 20
+            # rack_y = -200 + np.random.uniform(-1.0, 1.0) * 20
+            # rand = np.random.uniform(-2.0, 2.0)
+            # #rand = 1
+
+            length = np.random.uniform(0.2, 1.0) * 120
+            rack_x = np.random.uniform(-1.0, 0.2) * 120
+            rack_y = np.random.uniform(-1.0, 1.0) * 120
+            rand = np.random.uniform(-2.0, 2.0)
+            # rand = 1
 
         else:
             length = 100
             rack_x = -100
             rack_y = -200
+            rand = 1
 
-        ackerman_angle = np.arctan2(-2 * self.WB, self.TW)
+        ackerman_angle = np.arctan2(-2 * self.WB, self.TW)*rand
         ax0 = self.KPLX + length * np.cos(ackerman_angle)
         ay0 = self.KPLY + length * np.sin(ackerman_angle)
         state = np.array([rack_x, rack_y, ax0, ay0])
@@ -667,6 +800,8 @@ class StrOptEnv(gym.Env):
         self.state = x
         # No action during step
         self.step(0)
+
+        # print(self.border_ang, self.max_r)
 
         if self.border_ang > self.max_r:
             self.error += (self.border_ang - self.max_r)*max(self.check_error)*(180/np.pi)**2
