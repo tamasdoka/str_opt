@@ -15,3 +15,5 @@ Készítettem egy próba hálót is ami szintén jupyter notebookból futtathat�
 
 Továbbá található egy colab notebook is amelyben automatikusan letölti a szükséges környezetet githubról és futtatja rajta a tanuló algoritmust majd közli az eredményt.
 
+A dokumentáció, illetve a pontos további paraméterek, a reward függvény hangolása, az ügynök hatékony tanítása és kiértékelése még hátra van.
+
