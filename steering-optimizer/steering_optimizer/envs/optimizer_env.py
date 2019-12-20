@@ -416,13 +416,14 @@ class StrOptEnv(gym.Env):
 
             return (all(A[i] <= A[i + 1] for i in range(len(A) - 1)) or all(A[i] >= A[i + 1] for i in range(len(A) - 1)))
 
+        # TODO: Sometimes not monotonic needs further investigation
         if isMonotonic(r_array) is False:
-            print('Not monotonic! -> Bad configuration! loop:', loop_count)
-            print('angdiff_c, 0:', ang_diff_c_deg, angle_chop(betas[0] - alpha_c) * 180 / np.pi)
-            print('angdiff_c, 1:', ang_diff_c_deg, angle_chop(betas[1] - alpha_c) * 180 / np.pi)
-            print('initial beta and beta_c', beta_deg, beta_c_deg)
-            print(r_array*180/np.pi)
-            print(diag_array)
+            #print('Not monotonic! -> Bad configuration! loop:', loop_count)
+            #print('angdiff_c, 0:', ang_diff_c_deg, angle_chop(betas[0] - alpha_c) * 180 / np.pi)
+            #print('angdiff_c, 1:', ang_diff_c_deg, angle_chop(betas[1] - alpha_c) * 180 / np.pi)
+            #print('initial beta and beta_c', beta_deg, beta_c_deg)
+            #print(r_array*180/np.pi)
+            #print(diag_array)
             done = True
             reward = 0.0
             return np.array(self.state), reward, done, {}
@@ -524,6 +525,10 @@ class StrOptEnv(gym.Env):
             print('Here is the problem! -> not every angle value is unique')
             print('r_array_mod', r_array_mod)
             #input('Press enter!')
+            done = True
+            reward = -10
+            # print('Done: angle resolution error')
+            return np.array(self.state), reward, done, {}
         else:
             error = np.trapz(error_array_mod * 180/np.pi, r_array_mod * 180/np.pi)
 
@@ -535,13 +540,18 @@ class StrOptEnv(gym.Env):
             #    print('Top error reached', error)
             #    error = MAX_ERROR
 
+            # Not normal configuration
             if error < 0:
-                print('Error is not valid!:', error)
-                print(self.check_r)
-                print(self.check_error)
-                print('Invalid state:', self.state)
+                #print('Error is not valid!:', error)
+                #print(self.check_r)
+                #print(self.check_error)
+                #print('Invalid state:', self.state)
 
                 #self.save_plot(error_array_mod, r_array_mod, False)
+                done = True
+                reward = -10
+                # print('Done: not coherent turning direction')
+                return np.array(self.state), reward, done, {}
 
 
             # Integrating the total error
