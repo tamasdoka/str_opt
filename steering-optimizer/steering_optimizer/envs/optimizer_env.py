@@ -17,7 +17,7 @@ from pathlib import Path
 from scipy.interpolate import interp1d
 
 # Changing the 4 variables: raising or lowering
-N_DISCRETE_ACTIONS = 9
+N_DISCRETE_ACTIONS = 3
 WHEELBASE = 1900
 TRACK_WIDTH = 1200
 KINGPIN = 150
@@ -338,7 +338,7 @@ class StrOptEnv(gym.Env):
             diff_c = angle_chop(round(betas[0] - alpha_c, 5))
 
             if x == 0:
-                if round(betas[0] - beta_c, 3) == 0.000:
+                if round(betas[0] - beta_c, 10) == 0.000:
                     mark = False
                     arm_ca = betas[0] - beta_c
                 else:
@@ -687,8 +687,8 @@ class StrOptEnv(gym.Env):
         # return mod
 
     def render(self, mode='human'):
-        screen_width = 600
-        screen_height = 400
+        screen_width = self.TW
+        screen_height = self.TW
 
         world_width = self.TW + 200
         scale = screen_width / world_width
@@ -704,22 +704,44 @@ class StrOptEnv(gym.Env):
             from gym.envs.classic_control import rendering
             self.viewer = rendering.Viewer(screen_width, screen_height)
 
-            self.geometry = rendering.Line((self.KPLX,
-                                            self.state[2],
-                                            self.state[0],
-                                            -self.state[0],
-                                            -self.state[2],
-                                            -self.KPLX),
-                                           (self.KPLY,
-                                            self.state[3],
-                                            self.state[1],
-                                            self.state[1],
-                                            self.state[3],
-                                            self.KPLY))
-            self.geometry.set_color(0, 0, 0)
+            self.KPLX += self.TW/2
+            self.KPLY += self.TW / 2
+            self.state += self.TW / 2
+
+            # self.geometry = rendering.Line((self.KPLX,
+            #                                 self.state[2],
+            #                                 self.state[0],
+            #                                 -self.state[0],
+            #                                 -self.state[2],
+            #                                 -self.KPLX),
+            #                                (self.KPLY,
+            #                                 self.state[3],
+            #                                 self.state[1],
+            #                                 self.state[1],
+            #                                 self.state[3],
+            #                                 self.KPLY))
+            self.line_0 = rendering.Line((self.KPLX, self.KPLY), (self.state[2], self.state[3]))
+            self.line_1 = rendering.Line((self.state[2], self.state[3]), (self.state[0], self.state[1]))
+            self.line_2 = rendering.Line((self.state[0], self.state[1]), (-self.state[0] + self.TW, self.state[1]))
+            self.line_3 = rendering.Line((-self.state[0] + self.TW, self.state[1]), (-self.state[2] + self.TW, self.state[3]))
+            self.line_4 = rendering.Line((-self.state[2] + self.TW, self.state[3]), (-self.KPLX + self.TW, self.KPLY))
+            self.line_5 = rendering.Line((-self.KPLX, self.KPLY))
+
+            self.line_0.set_color(0, 0, 0)
+            self.line_1.set_color(0, 0, 0)
+            self.line_2.set_color(0, 0, 0)
+            self.line_3.set_color(0, 0, 0)
+            self.line_4.set_color(0, 0, 0)
+            self.line_5.set_color(0, 0, 0)
             # self.geometrytrans = rendering.Transform()
             # self.geometry.add_attr(self.geometrytrans)
-            self.viewer.add_geom(self.geometry)
+
+            self.viewer.add_geom(self.line_0)
+            self.viewer.add_geom(self.line_1)
+            self.viewer.add_geom(self.line_2)
+            self.viewer.add_geom(self.line_3)
+            self.viewer.add_geom(self.line_4)
+            #self.viewer.add_geom(self.line_5)
 
             # l, r, t, b = -cartwidth / 2, cartwidth / 2, cartheight / 2, -cartheight / 2
             # axleoffset = cartheight / 4.0
@@ -754,6 +776,10 @@ class StrOptEnv(gym.Env):
         # cartx = x[0] * scale + screen_width / 2.0  # MIDDLE OF CART
         # self.carttrans.set_translation(cartx, carty)
         # self.poletrans.set_rotation(-x[2])
+
+        self.KPLX -= self.TW / 2
+        self.KPLY -= self.TW / 2
+        self.state -= self.TW / 2
 
         return self.viewer.render(return_rgb_array=mode == 'rgb_array')
 
