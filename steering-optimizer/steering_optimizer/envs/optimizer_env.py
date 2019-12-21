@@ -304,6 +304,18 @@ class StrOptEnv(gym.Env):
             # Circles around the kingpin (A) and the left tierod endpoint (T)
             c1 = [0, 0, arm_length]
             c2 = [x_eval - self.KPLX, dy - self.KPLY, tierod_length]
+
+            dist = np.sqrt((x_eval - self.KPLX)**2 + (dy - self.KPLY)**2)
+            if dist > (arm_length + tierod_length):
+                print("#1 - separate", "dist, arm, tie", dist, arm_length, tierod_length)
+                return None  # no solutions, the circles are separate
+            if dist < abs(arm_length - tierod_length):
+                print("#2 - containing", "dist, arm, tie", dist, arm_length, tierod_length)
+                return None  # no solutions because one circle is contained within the other
+            if dist == 0 and arm_length == tierod_length:
+                print("#3 - coincident", "dist, arm, tie", dist, arm_length, tierod_length)
+                return None  # circles are coincident and there are an infinite number of solutions
+
             # Section points of the circles gives the mathematical solution for configuration
             c_sec = ct.Geometry().circle_intersection(c1, c2)
             betas = [np.arctan2(c_sec[1], c_sec[0]), np.arctan2(c_sec[3], c_sec[2])]
