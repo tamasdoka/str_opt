@@ -176,7 +176,7 @@ class StrOptEnv(gym.Env):
 
 
         # Initial TA distance
-        init_dist = np.sqrt((dx - ax) ** 2 + (dy - ay) ** 2)
+        init_dist = np.sqrt((dx - self.KPLX) ** 2 + (dy - self.KPLY) ** 2)
 
         # initial (left) control arm length and angle
         arm_length = np.sqrt((ax - self.KPLX) ** 2 + (ay - self.KPLY) ** 2)
@@ -204,6 +204,8 @@ class StrOptEnv(gym.Env):
 
         # Tierod length
         tierod_length = np.sqrt(np.power((ax - dx), 2) + np.power((ay - dy), 2))
+
+
 
         # Calculating the maximum of rack travel to positive direction (right), which turns the wheels to left (positive
         # turn angles)
@@ -318,6 +320,10 @@ class StrOptEnv(gym.Env):
 
             # Section points of the circles gives the mathematical solution for configuration
             c_sec = ct.Geometry().circle_intersection(c1, c2)
+
+            if c_sec is None:
+                print("init, arm, tie", init_dist, arm_length, tierod_length)
+
             betas = [np.arctan2(c_sec[1], c_sec[0]), np.arctan2(c_sec[3], c_sec[2])]
 
             # TODO all angles should be between -180 and 180
