@@ -716,9 +716,9 @@ class StrOptEnv(gym.Env):
             from gym.envs.classic_control import rendering
             self.viewer = rendering.Viewer(screen_width, screen_height)
 
-            self.KPLX += self.TW/2
-            self.KPLY += self.TW / 2
-            self.state += self.TW / 2
+            #self.KPLX += self.TW/2
+            #self.KPLY += self.TW / 2
+            #self.state += self.TW / 2
 
             # self.geometry = rendering.Line((self.KPLX,
             #                                 self.state[2],
@@ -789,9 +789,9 @@ class StrOptEnv(gym.Env):
         # self.carttrans.set_translation(cartx, carty)
         # self.poletrans.set_rotation(-x[2])
 
-        self.KPLX -= self.TW / 2
-        self.KPLY -= self.TW / 2
-        self.state -= self.TW / 2
+        #self.KPLX -= self.TW / 2
+        #self.KPLY -= self.TW / 2
+        #self.state -= self.TW / 2
 
         return self.viewer.render(return_rgb_array=mode == 'rgb_array')
 
