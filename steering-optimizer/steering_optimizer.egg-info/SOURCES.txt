@@ -1,0 +1,6 @@
+setup.py
+steering_optimizer.egg-info/PKG-INFO
+steering_optimizer.egg-info/SOURCES.txt
+steering_optimizer.egg-info/dependency_links.txt
+steering_optimizer.egg-info/requires.txt
+steering_optimizer.egg-info/top_level.txt
