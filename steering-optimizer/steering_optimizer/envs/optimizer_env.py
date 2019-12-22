@@ -171,7 +171,7 @@ class StrOptEnv(gym.Env):
 
         if done:
             #print('Done: step out of boundaries')
-            reward = -10
+            reward = -1
             return np.array(self.state), reward, done, {}
 
 
@@ -257,7 +257,7 @@ class StrOptEnv(gym.Env):
 
         if np.sign(init_alpha_deg) == np.sign(beta_deg) and abs(init_alpha_deg) >= abs(beta_deg):
             done = True
-            reward = -10
+            reward = -1
             #print('Done: not coherent turning direction')
             return np.array(self.state), reward, done, {}
 
@@ -544,7 +544,7 @@ class StrOptEnv(gym.Env):
             print('r_array_mod', r_array_mod)
             #input('Press enter!')
             done = True
-            reward = -10
+            reward = -1
             # print('Done: angle resolution error')
             return np.array(self.state), reward, done, {}
         else:
@@ -567,7 +567,7 @@ class StrOptEnv(gym.Env):
 
                 #self.save_plot(error_array_mod, r_array_mod, False)
                 done = True
-                reward = -10
+                reward = -1
                 # print('Done: not coherent turning direction')
                 return np.array(self.state), reward, done, {}
 
