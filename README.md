@@ -17,7 +17,7 @@ A környezet a str_opt/steering-optimizer/steering_optimizer/envs/ mappában tal
 Készítettem egy próba ügynök - hálózatot is, ami szintén jupyter notebookból futtatható, neve: custom_network_and_test-Copy1
 A hálózat megértését kommentek segítik.
 
-Továbbá található egy colab notebook is amelyben automatikusan letölti a szükséges környezetet githubról és futtatja rajta a stable baselines DQN ügynök algoritmust majd közli az eredményt. Itt sajnos a környezet hibája miatt általában megszakad a tanítás, a hibák a környezetben fel kell tárni.
+Továbbá található egy colab notebook is amelyben automatikusan letölti a szükséges környezetet githubról és futtatja rajta a stable baselines DQN ügynök algoritmust majd közli az eredményt. Itt sajnos a környezet hibája miatt általában megszakad a tanítás, a hibákat a környezetben fel kell tárni.
 
 
 
