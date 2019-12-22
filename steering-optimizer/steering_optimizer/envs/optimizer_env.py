@@ -333,6 +333,10 @@ class StrOptEnv(gym.Env):
 
             if c_sec is None:
                 print("init, arm, tie", init_dist, arm_length, tierod_length)
+                done = True
+                reward = -1
+                # no solutions, the circles are separate
+                return np.array(self.state), reward, done, {}
 
             betas = [np.arctan2(c_sec[1], c_sec[0]), np.arctan2(c_sec[3], c_sec[2])]
 
@@ -385,6 +389,11 @@ class StrOptEnv(gym.Env):
 
             if c_sec is None:
                 print("init, arm, tie", init_dist, arm_length, tierod_length)
+                done = True
+                reward = -1
+                # no solutions, the circles are separate
+                return np.array(self.state), reward, done, {}
+
             betas = [np.arctan2(c_sec[1], c_sec[0]), np.arctan2(c_sec[3], c_sec[2])]
 
             # TODO : IT IS A FORCED SOLUTION
