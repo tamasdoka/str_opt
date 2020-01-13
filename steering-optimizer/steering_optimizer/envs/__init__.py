@@ -1,1 +1,1 @@
-from steering_optimizer.envs.optimizer_env import StrOptEnv
+from steering_optimizer.envs.optimizer_env_v2 import StrOptEnv
