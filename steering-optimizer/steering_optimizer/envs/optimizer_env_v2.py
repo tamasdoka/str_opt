@@ -896,7 +896,7 @@ class StrOptEnv(gym.Env):
 
     def check_version(self):
         # Print version
-        print('StrOpt version: dev')
+        print('StrOpt version: dev v2')
 
     def objective(self, x):
         self.reset()
