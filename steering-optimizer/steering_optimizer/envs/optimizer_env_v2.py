@@ -613,23 +613,9 @@ class StrOptEnv(gym.Env):
             # self.check_error = error
             self.state = (dx, dy, ax, ay)
 
-            # Error is between 0 and 100000
-            #if abs(error) > MAX_ERROR:
-            #    print('Top error reached', error)
-            #    error = MAX_ERROR
-
             # Not normal configuration
             if error < 0:
-                #print('Error is not valid!:', error)
-                #print(self.check_r)
-                #print(self.check_error)
-                #print('Invalid state:', self.state)
-
-                #self.save_plot(error_array_mod, r_array_mod, False)
-                done = True
-                reward = -1
-                # print('Done: not coherent turning direction')
-                return np.array(self.state), reward, done, {}
+                return self.invalid_configuration()
 
 
             # Integrating the total error
@@ -639,31 +625,33 @@ class StrOptEnv(gym.Env):
             # self.save_plot(error_array, r_array)
 
         # Getting the reward after action
-        # Scenario 1: Max turning angle is under border angle.
-        # This is the first step after initialization
-        if self.max_r is None:
-            reward = 0.0
-        elif max(r_array) <= self.border_ang:
-            # The max angle is bigger than the previous
-            if max(r_array) > self.max_r:
-                reward = 0.01
-            elif error == self.error:
-                reward = -0.0005
-            else:
-                reward = -0.01
-        # Scenario 2: Max turning angle is above border angle
-        else:
-            # After the applied action the error got smaller
-            if error < self.error:
-                reward = 1.0
-            # Being above max error, or consecutive no action (8)
-            elif error == self.error:
-                reward = -0.05
-            # Error is getting bigger -> wrong action to take
-            elif self.max_r <= self.border_ang:
-                reward = 0.01
-            else:
-                reward = -0.5
+        # # Scenario 1: Max turning angle is under border angle.
+        # # This is the first step after initialization
+        # if self.max_r is None:
+        #     reward = 0.0
+        # elif max(r_array) <= self.border_ang:
+        #     # The max angle is bigger than the previous
+        #     if max(r_array) > self.max_r:
+        #         reward = 0.01
+        #     elif error == self.error:
+        #         reward = -0.0005
+        #     else:
+        #         reward = -0.01
+        # # Scenario 2: Max turning angle is above border angle
+        # else:
+        #     # After the applied action the error got smaller
+        #     if error < self.error:
+        #         reward = 1.0
+        #     # Being above max error, or consecutive no action (8)
+        #     elif error == self.error:
+        #         reward = -0.05
+        #     # Error is getting bigger -> wrong action to take
+        #     elif self.max_r <= self.border_ang:
+        #         reward = 0.01
+        #     else:
+        #         reward = -0.5
+
+        reward = self.reward_after_action()
 
         self.state = (dx, dy, ax, ay)
         self.max_r = max(r_array)
@@ -672,7 +660,7 @@ class StrOptEnv(gym.Env):
         if error < ERROR_THRESHOLD and self.max_r > self.border_ang:
             done = True
             #print('Done: Reached error threshold!')
-            reward = 100
+            reward = self.reward_after_action()
 
         if done is None:
 
@@ -941,3 +929,24 @@ class StrOptEnv(gym.Env):
         reward = -1
         self.error = None
         return np.array(self.state), reward, done, {}
+
+    def reward_after_action(self):
+        if self.error is None or self.max_r is None or self.border_ang is None:
+            reward = 0
+            return reward
+
+        ang_decrease = 1
+
+        if self.max_r < self.border_ang:
+            ang_decrease = np.exp(-abs(self.border_ang - self.max_r) * 20)
+
+        factor = ang_decrease
+
+        if self.error == 0:
+            reward = 100000 * factor
+        elif 1 / self.error > 100000:
+            reward = 100000 * factor
+        else:
+            reward = 1 / self.error * factor
+
+        return reward
